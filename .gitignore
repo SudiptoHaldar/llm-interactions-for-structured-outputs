@@ -205,3 +205,10 @@ cython_debug/
 marimo/_static/
 marimo/_lsp/
 __marimo__/
+
+# Local and private files
+CLAUDE.md
+settings.local.json
+.claude/
+reqspecs/
+tutor_llm_strategy_comparison.md
