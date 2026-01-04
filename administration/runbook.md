@@ -292,6 +292,12 @@ python -m database.sql.tables.ai_model create
 
 # 2. Create continents table (has FK to ai_models)
 python -m database.sql.tables.continent create
+
+# 3. Create countries table (has FK to ai_models)
+python -m database.sql.tables.country create
+
+# 4. Create cities table (has FK to countries)
+python -m database.sql.tables.city create
 ```
 
 #### Migrating Existing Databases
@@ -331,6 +337,137 @@ alter_table()
 rollback_alter()
 ```
 
+### 5.6 Countries Table
+
+The `countries` table stores comprehensive country information including economic indicators, quality of life metrics, and geopolitical data.
+
+**Using CLI:**
+
+```bash
+# Create countries table
+python -m database.sql.tables.country create
+
+# Check if exists
+python -m database.sql.tables.country exists
+
+# Add continent_id FK (for existing tables)
+python -m database.sql.tables.country alter
+
+# Rollback continent_id FK (WARNING: data loss!)
+python -m database.sql.tables.country rollback
+
+# Cleanup (drop table)
+python -m database.sql.tables.country cleanup
+```
+
+**Using Python:**
+
+```python
+from database.sql.tables.country import (
+    create_table, cleanup_table, exists, alter_table, rollback_alter
+)
+
+# Create the countries table
+create_table()
+
+# Check if table exists
+print(f"Table exists: {exists()}")
+
+# Add continent_id FK (for existing tables)
+alter_table()
+
+# Rollback continent_id FK (WARNING: data loss!)
+rollback_alter()
+
+# Drop the table (WARNING: deletes all data!)
+cleanup_table()
+```
+
+**Table Schema:**
+
+| Column | Type | Description |
+|--------|------|-------------|
+| country_id | INTEGER IDENTITY | Primary key |
+| ai_model_id | INTEGER (FK) | Reference to ai_models |
+| continent_id | INTEGER (FK) | Reference to continents |
+| name | VARCHAR(100) | Country name (unique) |
+| description | VARCHAR(250) | Brief description |
+| interesting_fact | VARCHAR(250) | Notable fact |
+| area_sq_mile | NUMERIC(15,2) | Area in square miles |
+| area_sq_km | NUMERIC(15,2) | Area in sq km |
+| population | BIGINT | Total population |
+| ppp | NUMERIC(15,2) | Purchasing power parity ($) |
+| life_expectancy | NUMERIC(5,2) | Life expectancy (years) |
+| travel_risk_level | VARCHAR(50) | US travel advisory |
+| global_peace_index_score | NUMERIC(5,3) | GPI score (IEP) |
+| global_peace_index_rank | INTEGER | GPI rank |
+| happiness_index_score | NUMERIC(5,3) | Happiness score |
+| happiness_index_rank | INTEGER | Happiness rank |
+| gdp | NUMERIC(18,2) | GDP in USD |
+| gdp_growth_rate | NUMERIC(6,2) | GDP growth (%) |
+| inflation_rate | NUMERIC(6,2) | Inflation (%) |
+| unemployment_rate | NUMERIC(5,2) | Unemployment (%) |
+| govt_debt | NUMERIC(6,2) | Govt debt (% GDP) |
+| credit_rating | VARCHAR(10) | S&P rating |
+| poverty_rate | NUMERIC(5,2) | Poverty (%) |
+| gini_coefficient | NUMERIC(5,2) | Gini coefficient |
+| military_spending | NUMERIC(5,2) | Military (% GDP) |
+| created_at | TIMESTAMPTZ | Creation time |
+| updated_at | TIMESTAMPTZ | Update time |
+
+### 5.7 Cities Table
+
+The `cities` table stores city information including safety indices, population data, and airport codes.
+
+**Using CLI:**
+
+```bash
+# Create cities table
+python -m database.sql.tables.city create
+
+# Check if exists
+python -m database.sql.tables.city exists
+
+# Cleanup (drop table)
+python -m database.sql.tables.city cleanup
+```
+
+**Using Python:**
+
+```python
+from database.sql.tables.city import create_table, cleanup_table, exists
+
+# Create the cities table
+create_table()
+
+# Check if table exists
+print(f"Table exists: {exists()}")
+
+# Drop the table (WARNING: deletes all data!)
+cleanup_table()
+```
+
+**Table Schema:**
+
+| Column | Type | Description |
+|--------|------|-------------|
+| city_id | INTEGER IDENTITY | Primary key |
+| country_id | INTEGER (FK) | Reference to countries |
+| name | VARCHAR(100) | City name |
+| is_capital | BOOLEAN | Capital city flag |
+| description | VARCHAR(250) | Brief description |
+| interesting_fact | VARCHAR(250) | Notable fact |
+| area_sq_mile | NUMERIC(15,2) | Area in square miles |
+| area_sq_km | NUMERIC(15,2) | Area in sq km |
+| population | BIGINT | Total population |
+| sci_score | NUMERIC(5,2) | EIU Safe Cities Index score |
+| sci_rank | INTEGER | EIU Safe Cities Index rank |
+| numbeo_si | NUMERIC(5,2) | Numbeo Safety Index |
+| numbeo_ci | NUMERIC(5,2) | Numbeo Crime Index |
+| airport_code | CHAR(3) | IATA airport code |
+| created_at | TIMESTAMPTZ | Creation time |
+| updated_at | TIMESTAMPTZ | Update time |
+
 ---
 
 ## 6. Process Structured Output Package
@@ -353,6 +490,7 @@ Ensure these environment variables are set in `.env`:
 DATABASE_URL=postgresql://user:password@localhost:5432/llm_interactions_db
 OPENAI_API_KEY=your_openai_api_key_here
 GOOGLE_API_KEY=your_google_api_key_here
+AI21_API_KEY=your_ai21_api_key_here
 ```
 
 ### 6.3 Using the CLI
@@ -405,7 +543,169 @@ Q2 Action: Upserting continent Africa...
     continent_id: 1
 ```
 
-### 6.4 Running Tests
+### 6.4 Get Country Information (AI21 / Anthropic)
+
+The `country-info` CLI retrieves comprehensive country and city data using supported LLM providers.
+
+**Supported Providers:**
+- `ai21` - AI21 Jamba model (default)
+- `anthropic` - Anthropic Claude model (uses tool use for structured output)
+
+**Usage:**
+
+```bash
+# Using AI21 (default)
+uv run country-info Nigeria
+
+# Using Anthropic
+uv run country-info Brazil --provider anthropic
+
+# Skip city retrieval
+uv run country-info "United States" --skip-cities
+uv run country-info Canada --provider anthropic --skip-cities
+
+# Using module directly
+python -m process_structured_output.cli_country Nigeria
+python -m process_structured_output.cli_country Brazil --provider anthropic
+```
+
+**Anthropic Countries (10):**
+Brazil, Canada, Denmark, Egypt, India, Italy, Nicaragua, Papua New Guinea, Singapore, Tanzania
+
+**Note for Windows users:** Use `uv run country-info` instead of just `country-info`, or use the module directly.
+
+**Expected output:**
+
+```
+=== Processing: Nigeria ===
+
+Continent lookup: Nigeria -> Africa
+
+Q1: Getting model identity...
+    Model Provider: AI21
+    Model Name: jamba-1.5-mini
+
+Q1 Action: Upserting ai_model...
+✓ Upserted ai_model: AI21/jamba-1.5-mini (id=2)
+    Continent ID: 1 (Africa)
+
+Q2: Getting country info for Nigeria...
+    Description: West African nation known for...
+    Area (sq mi): 356,669.00
+    Area (sq km): 923,768.00
+    Population: 220,000,000
+    GDP: $450,000,000,000
+    Life Expectancy: 55.0 years
+
+Q2 Action: Upserting country Nigeria...
+✓ Upserted country: Nigeria (id=1)
+
+Q3: Getting cities info for Nigeria...
+    Retrieved 5 cities
+    - Lagos: pop 15,000,000
+    - Kano: pop 4,000,000
+    - Ibadan: pop 3,500,000
+    - Abuja (capital): pop 3,200,000
+    - Port Harcourt: pop 2,800,000
+
+Q3 Action: Upserting 5 cities...
+✓ Upserted city: Lagos (id=1)
+✓ Upserted city: Kano (id=2)
+✓ Upserted city: Ibadan (id=3)
+✓ Upserted city: Abuja (id=4)
+✓ Upserted city: Port Harcourt (id=5)
+
+=== Complete ===
+    ai_model_id: 2
+    continent_id: 1
+    country_id: 1
+    city_ids: [1, 2, 3, 4, 5]
+```
+
+**Country data retrieved (21 fields):**
+- Basic: description, interesting_fact, area (sq mi/km), population
+- Economy: GDP, GDP growth rate, inflation rate, unemployment rate, PPP
+- Finance: government debt (% GDP), S&P credit rating
+- Social: life expectancy, poverty rate, Gini coefficient
+- Safety: travel risk level, Global Peace Index (score/rank), Happiness Index (score/rank)
+- Military: military spending (% GDP)
+
+**City data retrieved (13 fields):**
+- Basic: name, is_capital, description, interesting_fact, area (sq mi/km), population
+- Safety indices: EIU Safe Cities Index (score/rank), Numbeo Safety Index, Numbeo Crime Index
+- Travel: IATA airport code
+
+### 6.5 Batch Country Processing
+
+#### 6.5.1 AI21 Batch Processing
+
+The `all-countries-ai21` CLI processes all 10 countries assigned to AI21 in a single command.
+
+**Usage:**
+
+```bash
+cd process_structured_output
+uv run all-countries-ai21
+uv run all-countries-ai21 --skip-cities
+uv run all-countries-ai21 --dry-run
+
+# Using module directly
+python -m process_structured_output.cli_all_countries_ai21
+```
+
+**AI21 Countries (10):**
+Angola, Argentina, Australia, China, Croatia, Malaysia, Nigeria, Panama, Spain, United States
+
+#### 6.5.2 Anthropic Batch Processing
+
+The `all-countries-anthropic` CLI processes all 10 countries assigned to Anthropic in a single command.
+
+**Usage:**
+
+```bash
+cd process_structured_output
+uv run all-countries-anthropic
+uv run all-countries-anthropic --skip-cities
+uv run all-countries-anthropic --dry-run
+
+# Using module directly
+python -m process_structured_output.cli_all_countries_anthropic
+```
+
+**Anthropic Countries (10):**
+Brazil, Canada, Denmark, Egypt, India, Italy, Nicaragua, Papua New Guinea, Singapore, Tanzania
+
+**Expected output (both CLIs):**
+
+```
+=== Processing 10 [Provider] Countries ===
+
+Countries to process:
+  1. [Country 1]
+  2. [Country 2]
+  ...
+  10. [Country 10]
+
+==================================================
+
+[1/10] Processing: [Country 1]
+----------------------------------------
+[OK] [Country 1] completed successfully
+
+... (more countries) ...
+
+==================================================
+
+=== BATCH PROCESSING COMPLETE ===
+
+Total countries: 10
+Successful: 10
+Failed: 0
+Elapsed time: 120.5 seconds
+Average per country: 12.0 seconds
+```
+
+### 6.6 Running Tests
 
 ```bash
 cd process_structured_output
@@ -414,7 +714,7 @@ uv run ruff check .           # Linting
 uv run mypy src/              # Type checking
 ```
 
-### 6.5 Valid Continents
+### 6.7 Valid Continents
 
 The CLI accepts these continent names:
 - Africa
@@ -425,13 +725,15 @@ The CLI accepts these continent names:
 - Oceania
 - South America
 
-### 6.6 Prerequisites
+### 6.8 Prerequisites
 
 Before running the CLI, ensure:
 1. Database tables exist (see Section 5.5)
 2. `OPENAI_API_KEY` is set in `.env` (for OpenAI provider)
 3. `GOOGLE_API_KEY` is set in `.env` (for Google Gemini provider)
-4. `DATABASE_URL` is correctly configured
+4. `AI21_API_KEY` is set in `.env` (for AI21 Jamba provider)
+5. `ANTHROPIC_API_KEY` is set in `.env` (for Anthropic Claude provider)
+6. `DATABASE_URL` is correctly configured
 
 ---
 
@@ -554,6 +856,13 @@ uv run mypy .                 # Type checking
 
 | Version | Date | Description |
 |---------|------|-------------|
+| 0.15.0 | 2026-01-04 | Batch processing CLI for all Anthropic countries |
+| 0.14.0 | 2026-01-04 | Anthropic Claude provider for country-info CLI |
+| 0.13.0 | 2026-01-04 | Batch processing CLI for all AI21 countries |
+| 0.12.0 | 2026-01-04 | AI21 Jamba country-info CLI with 21 country and 13 city fields |
+| 0.11.0 | 2026-01-04 | Cities table - added is_capital column |
+| 0.10.0 | 2026-01-03 | Cities table with safety indices and airport codes |
+| 0.9.0 | 2026-01-03 | Countries table with 25 columns for country data |
 | 0.8.0 | 2026-01-03 | Utilities package with countries_info module |
 | 0.7.0 | 2026-01-03 | API endpoints for continents and AI models |
 | 0.6.0 | 2026-01-03 | Added Google Gemini provider with --provider CLI flag |
