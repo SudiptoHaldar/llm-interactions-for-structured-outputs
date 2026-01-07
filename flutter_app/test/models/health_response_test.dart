@@ -7,7 +7,7 @@ void main() {
       final json = {
         'status': 'healthy',
         'version': '1.0.0',
-        'database_connected': true,
+        'database': 'connected',
         'timestamp': '2026-01-02T12:00:00Z',
       };
 

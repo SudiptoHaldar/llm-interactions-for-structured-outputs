@@ -23,6 +23,9 @@ def _sanitize_json(content: str) -> str:
     - Single quotes instead of double quotes
     - Unquoted property names
     - JavaScript-style comments
+    - Control characters
+    - Markdown code blocks
+    - Comma-separated numbers (e.g., 3,796,742 instead of 3796742)
 
     Args:
         content: Raw JSON string
@@ -30,9 +33,30 @@ def _sanitize_json(content: str) -> str:
     Returns:
         Sanitized JSON string
     """
+    # Remove markdown code block markers if present
+    sanitized = re.sub(r"^```(?:json)?\s*\n?", "", content, flags=re.MULTILINE)
+    sanitized = re.sub(r"\n?```\s*$", "", sanitized, flags=re.MULTILINE)
+
     # Remove JavaScript-style comments (// and /* */)
-    sanitized = re.sub(r"//.*?$", "", content, flags=re.MULTILINE)
+    sanitized = re.sub(r"//.*?$", "", sanitized, flags=re.MULTILINE)
     sanitized = re.sub(r"/\*.*?\*/", "", sanitized, flags=re.DOTALL)
+
+    # Remove control characters (except newlines and tabs)
+    sanitized = re.sub(r"[\x00-\x08\x0b\x0c\x0e-\x1f]", "", sanitized)
+
+    # Remove commas from numbers (e.g., 3,796,742 -> 3796742)
+    # Matches: colon, optional space, then digits with commas (number format)
+    # Uses a function to remove commas only from the numeric part
+    def remove_number_commas(match: re.Match[str]) -> str:
+        prefix = match.group(1)  # ": " part
+        number = match.group(2).replace(",", "")  # Remove commas from number
+        return prefix + number
+
+    sanitized = re.sub(
+        r'(:\s*)(\d{1,3}(?:,\d{3})+)(?=[,\s\n\r}\]])',
+        remove_number_commas,
+        sanitized,
+    )
 
     # Remove trailing commas before closing braces/brackets
     # Matches: comma, optional whitespace/newlines, then } or ]
@@ -40,9 +64,28 @@ def _sanitize_json(content: str) -> str:
 
     # Quote unquoted property names (handles: {key: "value"} -> {"key": "value"})
     # This matches word characters followed by colon, not already quoted
-    sanitized = re.sub(r"(?<=[{,])\s*(\w+)\s*:", r' "\1":', sanitized)
+    # More robust pattern that handles newlines
+    sanitized = re.sub(r'([{,]\s*)(\w+)(\s*:)', r'\1"\2"\3', sanitized)
 
     return sanitized
+
+
+def _try_extract_json(content: str) -> str:
+    """
+    Try to extract valid JSON from content that may have surrounding text.
+
+    Args:
+        content: Raw content that may contain JSON
+
+    Returns:
+        Extracted JSON string
+    """
+    # Try to find JSON object boundaries
+    start = content.find("{")
+    end = content.rfind("}")
+    if start != -1 and end != -1 and end > start:
+        return content[start : end + 1]
+    return content
 
 
 # Maximum retries for transient LLM JSON parsing failures
@@ -69,10 +112,13 @@ class AI21Provider:
 
     def get_model_identity(self) -> ModelIdentity:
         """
-        Ask AI21 which model is responding.
+        Return hardcoded model identity for AI21 Jamba.
+
+        Note: LLMs cannot reliably self-identify as they may have been trained
+        on data from other models. Using hardcoded values ensures consistency.
 
         Returns:
-            ModelIdentity with model_provider and model_name
+            ModelIdentity with model_provider="AI21" and model_name
 
         Example:
             >>> provider = AI21Provider()
@@ -80,33 +126,9 @@ class AI21Provider:
             >>> print(identity.model_provider)
             AI21
         """
-        response = self.client.chat.completions.create(
-            messages=[
-                ChatMessage(
-                    role="user",
-                    content=(
-                        "Who is answering this question? Response should be in the "
-                        "form of 'Model Provider: {model_provider} | "
-                        "Model Name: {model_name}'"
-                    ),
-                )
-            ],
-            model=self.model,
-            max_tokens=100,
-        )
-
-        content = response.choices[0].message.content or ""
-
-        # Parse response: "Model Provider: AI21 | Model Name: jamba-mini"
-        pattern = r"Model Provider:\s*([^|]+)\s*\|\s*Model Name:\s*(.+)"
-        match = re.search(pattern, content, re.IGNORECASE)
-
-        if not match:
-            raise ValueError(f"Could not parse model identity from: {content}")
-
         return ModelIdentity(
-            model_provider=match.group(1).strip(),
-            model_name=match.group(2).strip(),
+            model_provider="AI21",
+            model_name=self.model,
         )
 
     def get_country_info(self, country_name: str) -> CountryInfo:
@@ -147,7 +169,9 @@ class AI21Provider:
                         "- population: total population (integer)\n"
                         "- ppp: purchasing power parity in USD (number)\n"
                         "- life_expectancy: in years (number)\n"
-                        "- travel_risk_level: US State Dept advisory (string)\n"
+                        "- travel_risk_level: US State Dept advisory in format "
+                        "'Level X: Description' where X is 1-4 "
+                        "(e.g., 'Level 3: Reconsider Travel')\n"
                         "- global_peace_index_score: IEP score (number)\n"
                         "- global_peace_index_rank: IEP rank (integer)\n"
                         "- happiness_index_score: Oxford score (number)\n"
@@ -172,10 +196,14 @@ class AI21Provider:
         content = response.choices[0].message.content or "{}"
 
         try:
-            sanitized = _sanitize_json(content)
+            extracted = _try_extract_json(content)
+            sanitized = _sanitize_json(extracted)
             data = json.loads(sanitized)
             return CountryInfo(**data)
         except (json.JSONDecodeError, ValidationError) as e:
+            # Show raw content for debugging
+            print(f"\n[DEBUG] Raw JSON response:\n{content[:1000]}")
+            print(f"\n[DEBUG] Sanitized JSON:\n{sanitized[:1000]}")
             raise ValueError(f"Failed to parse country info: {e}") from e
 
     def get_country_info_with_retry(self, country_name: str) -> CountryInfo:
@@ -257,7 +285,8 @@ class AI21Provider:
         content = response.choices[0].message.content or '{"cities": []}'
 
         try:
-            sanitized = _sanitize_json(content)
+            extracted = _try_extract_json(content)
+            sanitized = _sanitize_json(extracted)
             data = json.loads(sanitized)
             # Handle both formats: direct list or {"cities": [...]}
             if isinstance(data, list):

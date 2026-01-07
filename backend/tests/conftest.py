@@ -13,7 +13,12 @@ from sqlalchemy.ext.asyncio import (
 from app.db.base import Base
 from app.db.session import get_db
 from app.main import app
-from app.models import AIModel, Continent  # noqa: F401 - Import models for metadata
+from app.models import (  # noqa: F401 - Import for metadata
+    AIModel,
+    City,
+    Continent,
+    Country,
+)
 
 # Test database URL (SQLite for testing)
 TEST_DATABASE_URL = "sqlite+aiosqlite:///:memory:"

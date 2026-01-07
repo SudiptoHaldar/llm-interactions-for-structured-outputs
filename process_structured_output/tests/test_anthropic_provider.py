@@ -35,44 +35,17 @@ class TestAnthropicProvider:
             AnthropicProvider()
 
     @patch.dict("os.environ", {"ANTHROPIC_API_KEY": "test-key"})
-    def test_get_model_identity_parses_response(self) -> None:
-        """Test get_model_identity parses response correctly."""
-        mock_response = MagicMock()
-        mock_content = MagicMock()
-        mock_content.text = "Model Provider: Anthropic | Model Name: claude-haiku-4-5"
-        mock_response.content = [mock_content]
-
+    def test_get_model_identity_returns_hardcoded_values(self) -> None:
+        """Test get_model_identity returns hardcoded provider and model name."""
         with patch(
             "process_structured_output.providers.anthropic_provider.Anthropic"
-        ) as mock_anthropic:
-            mock_client = MagicMock()
-            mock_client.messages.create.return_value = mock_response
-            mock_anthropic.return_value = mock_client
-
+        ):
             provider = AnthropicProvider()
             identity = provider.get_model_identity()
 
+            # Hardcoded values - no API call made
             assert identity.model_provider == "Anthropic"
             assert identity.model_name == "claude-haiku-4-5"
-
-    @patch.dict("os.environ", {"ANTHROPIC_API_KEY": "test-key"})
-    def test_get_model_identity_raises_on_invalid_format(self) -> None:
-        """Test get_model_identity raises on invalid response format."""
-        mock_response = MagicMock()
-        mock_content = MagicMock()
-        mock_content.text = "I am Claude"
-        mock_response.content = [mock_content]
-
-        with patch(
-            "process_structured_output.providers.anthropic_provider.Anthropic"
-        ) as mock_anthropic:
-            mock_client = MagicMock()
-            mock_client.messages.create.return_value = mock_response
-            mock_anthropic.return_value = mock_client
-
-            provider = AnthropicProvider()
-            with pytest.raises(ValueError, match="Could not parse"):
-                provider.get_model_identity()
 
     @patch.dict("os.environ", {"ANTHROPIC_API_KEY": "test-key"})
     def test_get_country_info_parses_tool_response(self) -> None:

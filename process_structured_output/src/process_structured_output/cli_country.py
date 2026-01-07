@@ -22,6 +22,24 @@ from process_structured_output.providers.ai21_provider import (  # noqa: E402
 from process_structured_output.providers.anthropic_provider import (  # noqa: E402
     AnthropicProvider,
 )
+from process_structured_output.providers.cohere_provider import (  # noqa: E402
+    CohereProvider,
+)
+from process_structured_output.providers.deepseek_provider import (  # noqa: E402
+    DeepSeekProvider,
+)
+from process_structured_output.providers.google_provider import (  # noqa: E402
+    GoogleProvider,
+)
+from process_structured_output.providers.groq_provider import (  # noqa: E402
+    GroqProvider,
+)
+from process_structured_output.providers.mistral_provider import (  # noqa: E402
+    MistralProvider,
+)
+from process_structured_output.providers.openai_provider import (  # noqa: E402
+    OpenAIProvider,
+)
 
 
 def process_country(
@@ -58,11 +76,26 @@ def process_country(
         print("         Continent will be set to NULL in database")
 
     # Initialize provider
-    llm_provider: AI21Provider | AnthropicProvider
+    llm_provider: (
+        AI21Provider | AnthropicProvider | CohereProvider | DeepSeekProvider
+        | GoogleProvider | GroqProvider | MistralProvider | OpenAIProvider
+    )
     if provider == "ai21":
         llm_provider = AI21Provider()
     elif provider == "anthropic":
         llm_provider = AnthropicProvider()
+    elif provider == "cohere":
+        llm_provider = CohereProvider()
+    elif provider == "deepseek":
+        llm_provider = DeepSeekProvider()
+    elif provider == "google":
+        llm_provider = GoogleProvider()
+    elif provider == "groq":
+        llm_provider = GroqProvider()
+    elif provider == "mistral":
+        llm_provider = MistralProvider()
+    elif provider == "openai":
+        llm_provider = OpenAIProvider()
     else:
         raise ValueError(f"Unknown provider: {provider}")
 
@@ -148,6 +181,12 @@ Examples:
   country-info "South Africa" --skip-cities
   country-info Brazil --provider anthropic
   country-info Japan --provider ai21
+  country-info Germany --provider cohere
+  country-info Poland --provider deepseek
+  country-info Kenya --provider google
+  country-info Ghana --provider groq
+  country-info Algeria --provider mistral
+  country-info France --provider openai
         """,
     )
     parser.add_argument(
@@ -158,7 +197,10 @@ Examples:
     parser.add_argument(
         "--provider",
         type=str,
-        choices=["ai21", "anthropic"],
+        choices=[
+            "ai21", "anthropic", "cohere", "deepseek", "google", "groq",
+            "mistral", "openai"
+        ],
         default="ai21",
         help="LLM provider to use (default: ai21)",
     )

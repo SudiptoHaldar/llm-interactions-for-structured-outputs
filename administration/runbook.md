@@ -170,6 +170,92 @@ uv run mypy app/                    # Type checking
 }
 ```
 
+### 4.4 Countries Endpoints
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/api/v1/countries` | GET | List all countries |
+| `/api/v1/countries/{country_id}` | GET | Get country by ID |
+| `/api/v1/countries/name/{country_name}` | GET | Get country by name (case-insensitive) |
+| `/api/v1/countries/continent/{continent_id}` | GET | Get countries by continent ID |
+| `/api/v1/countries/continent/name/{continent_name}` | GET | Get countries by continent name |
+| `/api/v1/countries/model/{model_id}` | GET | Get countries by AI model ID |
+
+**Example Response (GET /api/v1/countries):**
+```json
+{
+  "countries": [
+    {
+      "country_id": 1,
+      "name": "Spain",
+      "description": "European country known for diverse landscapes",
+      "interesting_fact": "Home to world's oldest restaurant",
+      "area_sq_mile": 195000.0,
+      "area_sq_km": 506000.0,
+      "population": 47400000,
+      "ppp": 47210.0,
+      "life_expectancy": 82.1,
+      "travel_risk_level": "Level 1",
+      "global_peace_index_score": 1.54,
+      "global_peace_index_rank": 23,
+      "happiness_index_score": 6.93,
+      "happiness_index_rank": 29,
+      "gdp": 1400000000000.0,
+      "gdp_growth_rate": 2.5,
+      "inflation_rate": 3.2,
+      "unemployment_rate": 12.5,
+      "govt_debt": 118.0,
+      "credit_rating": "A",
+      "poverty_rate": 20.0,
+      "gini_coefficient": 34.7,
+      "military_spending": 1.2,
+      "continent_id": 1,
+      "ai_model_id": 1,
+      "created_at": "2026-01-06T10:00:00Z",
+      "updated_at": "2026-01-06T10:00:00Z"
+    }
+  ],
+  "count": 1
+}
+```
+
+### 4.5 Cities Endpoints
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/api/v1/cities` | GET | List all cities |
+| `/api/v1/cities/{city_id}` | GET | Get city by ID |
+| `/api/v1/cities/name/{city_name}` | GET | Get city by name (case-insensitive) |
+| `/api/v1/cities/country/{country_id}` | GET | Get cities by country ID |
+| `/api/v1/cities/country/name/{country_name}` | GET | Get cities by country name |
+
+**Example Response (GET /api/v1/cities):**
+```json
+{
+  "cities": [
+    {
+      "city_id": 1,
+      "country_id": 1,
+      "name": "Madrid",
+      "is_capital": true,
+      "description": "Capital and largest city of Spain",
+      "interesting_fact": "Home to the world-famous Prado Museum",
+      "area_sq_mile": 233.3,
+      "area_sq_km": 604.3,
+      "population": 3200000,
+      "sci_score": 82.4,
+      "sci_rank": 23,
+      "numbeo_si": 86.8,
+      "numbeo_ci": 27.2,
+      "airport_code": "MAD",
+      "created_at": "2026-01-06T15:00:00Z",
+      "updated_at": "2026-01-06T15:00:00Z"
+    }
+  ],
+  "count": 1
+}
+```
+
 ---
 
 ## 5. Database Package
@@ -491,6 +577,7 @@ DATABASE_URL=postgresql://user:password@localhost:5432/llm_interactions_db
 OPENAI_API_KEY=your_openai_api_key_here
 GOOGLE_API_KEY=your_google_api_key_here
 AI21_API_KEY=your_ai21_api_key_here
+CO_API_KEY=your_cohere_api_key_here
 ```
 
 ### 6.3 Using the CLI
@@ -543,13 +630,19 @@ Q2 Action: Upserting continent Africa...
     continent_id: 1
 ```
 
-### 6.4 Get Country Information (AI21 / Anthropic)
+### 6.4 Get Country Information (AI21 / Anthropic / Cohere / DeepSeek / Google / Groq / Mistral / OpenAI)
 
 The `country-info` CLI retrieves comprehensive country and city data using supported LLM providers.
 
 **Supported Providers:**
 - `ai21` - AI21 Jamba model (default)
 - `anthropic` - Anthropic Claude model (uses tool use for structured output)
+- `cohere` - Cohere Command R+ model (uses JSON schema for structured output)
+- `deepseek` - DeepSeek-V3 model (uses OpenAI-compatible API with JSON mode)
+- `google` - Google Gemini model (uses response_mime_type with schema)
+- `groq` - Groq Llama model (uses JSON mode, very fast inference)
+- `mistral` - Mistral Large model (uses JSON mode)
+- `openai` - OpenAI GPT-4o model (uses JSON mode)
 
 **Usage:**
 
@@ -560,17 +653,63 @@ uv run country-info Nigeria
 # Using Anthropic
 uv run country-info Brazil --provider anthropic
 
+# Using Cohere
+uv run country-info Germany --provider cohere
+
+# Using DeepSeek
+uv run country-info Poland --provider deepseek
+
+# Using Google
+uv run country-info Kenya --provider google
+
+# Using Groq
+uv run country-info Ghana --provider groq
+
+# Using Mistral
+uv run country-info Algeria --provider mistral
+
+# Using OpenAI
+uv run country-info France --provider openai
+
 # Skip city retrieval
 uv run country-info "United States" --skip-cities
 uv run country-info Canada --provider anthropic --skip-cities
+uv run country-info Japan --provider cohere --skip-cities
+uv run country-info "South Korea" --provider deepseek --skip-cities
+uv run country-info Ireland --provider google --skip-cities
+uv run country-info Morocco --provider openai --skip-cities
 
 # Using module directly
 python -m process_structured_output.cli_country Nigeria
 python -m process_structured_output.cli_country Brazil --provider anthropic
+python -m process_structured_output.cli_country Germany --provider cohere
+python -m process_structured_output.cli_country Poland --provider deepseek
+python -m process_structured_output.cli_country Kenya --provider google
+python -m process_structured_output.cli_country Ghana --provider groq
+python -m process_structured_output.cli_country Algeria --provider mistral
+python -m process_structured_output.cli_country France --provider openai
 ```
 
 **Anthropic Countries (10):**
 Brazil, Canada, Denmark, Egypt, India, Italy, Nicaragua, Papua New Guinea, Singapore, Tanzania
+
+**Cohere Countries (10):**
+Bahamas, Chile, Germany, Japan, Mexico, New Zealand, Pakistan, South Africa, Sudan, Switzerland
+
+**DeepSeek Countries (10):**
+Bangladesh, Colombia, Costa Rica, Cuba, Ethiopia, Fiji, Hungary, Poland, South Korea, Uganda
+
+**Google Countries (10):**
+Kenya, Mozambique, Indonesia, Iran, Vanuatu, Malta, Ireland, Dominica, Trinidad and Tobago, Peru
+
+**Groq Countries (10):**
+Estonia, Ghana, Haiti, Israel, Kiribati, Madagascar, Saint Lucia, United Kingdom, Uruguay, Vietnam
+
+**Mistral Countries (10):**
+Algeria, Barbados, Belgium, Cote d'Ivoire, Jamaica, Portugal, Saudi Arabia, Suriname, Thailand, Tonga
+
+**OpenAI Countries (10):**
+Azerbaijan, Cameroon, Ecuador, Finland, France, Grenada, Guatemala, Morocco, Nauru, Philippines
 
 **Note for Windows users:** Use `uv run country-info` instead of just `country-info`, or use the module directly.
 
@@ -675,7 +814,64 @@ python -m process_structured_output.cli_all_countries_anthropic
 **Anthropic Countries (10):**
 Brazil, Canada, Denmark, Egypt, India, Italy, Nicaragua, Papua New Guinea, Singapore, Tanzania
 
-**Expected output (both CLIs):**
+#### 6.5.3 Cohere Batch Processing
+
+The `all-countries-cohere` CLI processes all 10 countries assigned to Cohere in a single command.
+
+**Usage:**
+
+```bash
+cd process_structured_output
+uv run all-countries-cohere
+uv run all-countries-cohere --skip-cities
+uv run all-countries-cohere --dry-run
+
+# Using module directly
+python -m process_structured_output.cli_all_countries_cohere
+```
+
+**Cohere Countries (10):**
+South Africa, Sudan, Japan, Pakistan, New Zealand, Germany, Switzerland, Mexico, Bahamas, Chile
+
+#### 6.5.4 DeepSeek Batch Processing
+
+The `all-countries-deepseek` CLI processes all 10 countries assigned to DeepSeek in a single command.
+
+**Usage:**
+
+```bash
+cd process_structured_output
+uv run all-countries-deepseek
+uv run all-countries-deepseek --skip-cities
+uv run all-countries-deepseek --dry-run
+
+# Using module directly
+python -m process_structured_output.cli_all_countries_deepseek
+```
+
+**DeepSeek Countries (10):**
+Bangladesh, Colombia, Costa Rica, Cuba, Ethiopia, Fiji, Hungary, Poland, South Korea, Uganda
+
+#### 6.5.5 Google Batch Processing
+
+The `all-countries-google` CLI processes all 10 countries assigned to Google in a single command.
+
+**Usage:**
+
+```bash
+cd process_structured_output
+uv run all-countries-google
+uv run all-countries-google --skip-cities
+uv run all-countries-google --dry-run
+
+# Using module directly
+python -m process_structured_output.cli_all_countries_google
+```
+
+**Google Countries (10):**
+Kenya, Mozambique, Indonesia, Iran, Vanuatu, Malta, Ireland, Dominica, Trinidad and Tobago, Peru
+
+**Expected output (all batch CLIs):**
 
 ```
 === Processing 10 [Provider] Countries ===
@@ -705,6 +901,63 @@ Elapsed time: 120.5 seconds
 Average per country: 12.0 seconds
 ```
 
+#### 6.5.6 Groq Batch Processing
+
+The `all-countries-groq` CLI processes all 10 countries assigned to Groq in a single command.
+
+**Usage:**
+
+```bash
+cd process_structured_output
+uv run all-countries-groq
+uv run all-countries-groq --skip-cities
+uv run all-countries-groq --dry-run
+
+# Using module directly
+python -m process_structured_output.cli_all_countries_groq
+```
+
+**Groq Countries (10):**
+Estonia, Ghana, Haiti, Israel, Kiribati, Madagascar, Saint Lucia, United Kingdom, Uruguay, Vietnam
+
+#### 6.5.7 Mistral Batch Processing
+
+The `all-countries-mistral` CLI processes all 10 countries assigned to Mistral in a single command.
+
+**Usage:**
+
+```bash
+cd process_structured_output
+uv run all-countries-mistral
+uv run all-countries-mistral --skip-cities
+uv run all-countries-mistral --dry-run
+
+# Using module directly
+python -m process_structured_output.cli_all_countries_mistral
+```
+
+**Mistral Countries (10):**
+Algeria, Barbados, Belgium, Cote d'Ivoire, Jamaica, Portugal, Saudi Arabia, Suriname, Thailand, Tonga
+
+#### 6.5.8 OpenAI Batch Processing
+
+The `all-countries-openai` CLI processes all 10 countries assigned to OpenAI in a single command.
+
+**Usage:**
+
+```bash
+cd process_structured_output
+uv run all-countries-openai
+uv run all-countries-openai --skip-cities
+uv run all-countries-openai --dry-run
+
+# Using module directly
+python -m process_structured_output.cli_all_countries_openai
+```
+
+**OpenAI Countries (10):**
+Azerbaijan, Cameroon, Ecuador, Finland, France, Grenada, Guatemala, Morocco, Nauru, Philippines
+
 ### 6.6 Running Tests
 
 ```bash
@@ -733,7 +986,11 @@ Before running the CLI, ensure:
 3. `GOOGLE_API_KEY` is set in `.env` (for Google Gemini provider)
 4. `AI21_API_KEY` is set in `.env` (for AI21 Jamba provider)
 5. `ANTHROPIC_API_KEY` is set in `.env` (for Anthropic Claude provider)
-6. `DATABASE_URL` is correctly configured
+6. `CO_API_KEY` is set in `.env` (for Cohere Command R+ provider)
+7. `DEEPSEEK_API_KEY` is set in `.env` (for DeepSeek provider)
+8. `GROQ_API_KEY` is set in `.env` (for Groq provider)
+9. `MISTRAL_API_KEY` is set in `.env` (for Mistral provider)
+10. `DATABASE_URL` is correctly configured
 
 ---
 
@@ -852,10 +1109,158 @@ uv run mypy .                 # Type checking
 
 ---
 
-## 8. Version History
+## 8. Flutter App
+
+### 8.1 Prerequisites
+
+- Flutter SDK 3.10+ (https://flutter.dev/docs/get-started/install)
+- Android Studio (for Android emulator) or Chrome (for web)
+
+### 8.2 Installation
+
+```bash
+cd flutter_app
+flutter pub get
+```
+
+### 8.3 Running the App
+
+```bash
+cd flutter_app
+
+# Run on connected device or emulator
+flutter run
+
+# Run on Chrome (web)
+flutter run -d chrome
+
+# Run on Android emulator
+flutter run -d android
+```
+
+### 8.4 Running Tests
+
+```bash
+cd flutter_app
+
+# Run all tests
+flutter test
+
+# Run with verbose output
+flutter test -v
+
+# Run specific test file
+flutter test test/widgets/continent_carousel_test.dart
+flutter test test/screens/landing_screen_test.dart
+```
+
+### 8.5 Analyzing Code
+
+```bash
+cd flutter_app
+flutter analyze
+```
+
+### 8.6 Landing Screen
+
+The app launches with the Landing Screen featuring:
+
+1. **Continent Carousel** (top): Horizontal scrollable list of 7 continent images
+   - Africa, Antarctica, Asia, Europe, North America, Oceania, South America
+   - Tapping a continent shows a snackbar with the selected continent name
+   - Images located in `assets/images/continents/`
+
+2. **Globetrotter Hero** (bottom): Full-width image with title overlay
+   - "The Virtual Globetrotter" title
+   - Image located in `assets/images/globetrotter.png`
+
+### 8.7 Asset Structure
+
+```
+flutter_app/assets/images/
+├── globetrotter.png          # Hero image for landing screen
+└── continents/
+    ├── africa.png
+    ├── antarctica.png
+    ├── asia.png
+    ├── europe.png
+    ├── north_america.png
+    ├── oceania.png
+    └── south_america.png
+```
+
+### 8.8 Troubleshooting
+
+**Symptom**: Images not loading / "Unable to load asset"
+
+**Solutions**:
+1. Verify `pubspec.yaml` includes asset paths:
+   ```yaml
+   flutter:
+     assets:
+       - assets/images/
+       - assets/images/continents/
+   ```
+2. Run `flutter pub get` to refresh asset cache
+3. Restart the app with `flutter run`
+
+**Symptom**: Tests failing with hit test warnings
+
+**Solution**: Tests that tap widgets should tap text labels instead of widget types:
+```dart
+// Instead of:
+await tester.tap(find.byType(ContinentCard));
+
+// Use:
+await tester.tap(find.text('Africa'));
+```
+
+### 8.9 Interactive Features (v2)
+
+The landing page includes interactive enhancements:
+
+1. **Selection Animation**
+   - Tap a continent to select it
+   - Selected card shows primary color border, scales up 1.1x, and text becomes bold
+   - Hero image changes to show the selected continent at 30% opacity
+   - Hero title updates to show continent name
+
+2. **Ripple Effect**
+   - Material Design ripple animation on tap
+   - Uses InkWell widget wrapped in Material
+
+3. **Hover Animation (Web/Desktop)**
+   - Cards scale up 1.05x on hover
+   - Image opacity reduces to 80% on hover
+
+4. **Auto-Centering (Mobile)**
+   - Selected continent scrolls to center of viewport
+   - First and last continents scroll to edges (can't fully center)
+
+5. **Toggle Selection**
+   - Tap the same continent again to deselect
+   - Returns to showing globetrotter image and title
+
+---
+
+## 9. Version History
 
 | Version | Date | Description |
 |---------|------|-------------|
+| 0.29.0 | 2026-01-06 | Landing page enhancements: selection, ripple, hover, dynamic hero, auto-center |
+| 0.28.0 | 2026-01-06 | Flutter landing page with continent carousel and hero image |
+| 0.27.0 | 2026-01-05 | Batch processing CLI for all OpenAI countries |
+| 0.26.0 | 2026-01-05 | OpenAI GPT-4o provider for country-info CLI |
+| 0.25.0 | 2026-01-05 | Batch processing CLI for all Mistral countries |
+| 0.24.0 | 2026-01-05 | Mistral Large provider for country-info CLI |
+| 0.23.0 | 2026-01-05 | Batch processing CLI for all Groq countries |
+| 0.22.0 | 2026-01-05 | Groq Llama provider for country-info CLI |
+| 0.21.0 | 2026-01-05 | Batch processing CLI for all Google countries |
+| 0.20.0 | 2026-01-05 | Google Gemini provider for country-info CLI |
+| 0.19.0 | 2026-01-05 | Batch processing CLI for all DeepSeek countries |
+| 0.18.0 | 2026-01-05 | DeepSeek provider for country-info CLI (OpenAI-compatible API) |
+| 0.17.0 | 2026-01-04 | Batch processing CLI for all Cohere countries |
+| 0.16.0 | 2026-01-04 | Cohere Command R+ provider for country-info CLI |
 | 0.15.0 | 2026-01-04 | Batch processing CLI for all Anthropic countries |
 | 0.14.0 | 2026-01-04 | Anthropic Claude provider for country-info CLI |
 | 0.13.0 | 2026-01-04 | Batch processing CLI for all AI21 countries |

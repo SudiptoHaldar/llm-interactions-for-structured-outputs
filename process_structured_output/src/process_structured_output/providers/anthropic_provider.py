@@ -1,7 +1,6 @@
 """Anthropic Claude provider for structured outputs."""
 
 import os
-import re
 import time
 from typing import Any
 
@@ -55,7 +54,10 @@ def _build_country_tool() -> dict[str, Any]:
                 },
                 "travel_risk_level": {
                     "type": "string",
-                    "description": "US State Dept advisory level",
+                    "description": (
+                        "US State Dept advisory in format 'Level X: Description' "
+                        "where X is 1-4 (e.g., 'Level 3: Reconsider Travel')"
+                    ),
                 },
                 "global_peace_index_score": {
                     "type": "number",
@@ -245,38 +247,17 @@ class AnthropicProvider:
 
     def get_model_identity(self) -> ModelIdentity:
         """
-        Ask Claude which model is responding.
+        Return hardcoded model identity for Anthropic Claude.
+
+        Note: LLMs cannot reliably self-identify as they may have been trained
+        on data from other models. Using hardcoded values ensures consistency.
 
         Returns:
-            ModelIdentity with model_provider and model_name
+            ModelIdentity with model_provider="Anthropic" and model_name
         """
-        response = self.client.messages.create(
-            model=self.model,
-            max_tokens=100,
-            messages=[
-                {
-                    "role": "user",
-                    "content": (
-                        "Who is answering this question? Response should be in the "
-                        "form of 'Model Provider: {model_provider} | "
-                        "Model Name: {model_name}'"
-                    ),
-                }
-            ],
-        )
-
-        content = response.content[0].text if response.content else ""  # type: ignore[union-attr]
-
-        # Parse response: "Model Provider: Anthropic | Model Name: claude-haiku"
-        pattern = r"Model Provider:\s*([^|]+)\s*\|\s*Model Name:\s*(.+)"
-        match = re.search(pattern, content, re.IGNORECASE)
-
-        if not match:
-            raise ValueError(f"Could not parse model identity from: {content}")
-
         return ModelIdentity(
-            model_provider=match.group(1).strip(),
-            model_name=match.group(2).strip(),
+            model_provider="Anthropic",
+            model_name=self.model,
         )
 
     def get_country_info(self, country_name: str) -> CountryInfo:

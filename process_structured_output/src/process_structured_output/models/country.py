@@ -46,7 +46,10 @@ class CountryInfo(BaseModel):
     )
     travel_risk_level: str = Field(
         ...,
-        description="US State Dept travel advisory level",
+        description=(
+            "US State Dept advisory in format 'Level X: Description' "
+            "where X is 1-4 (e.g., 'Level 3: Reconsider Travel')"
+        ),
         max_length=50,
     )
     global_peace_index_score: float = Field(
@@ -177,9 +180,9 @@ class CityInfo(BaseModel):
         ge=0,
         le=100,
     )
-    airport_code: str = Field(
-        ...,
-        description="IATA 3-letter airport code",
+    airport_code: str | None = Field(
+        None,
+        description="IATA 3-letter airport code (None if no nearby airport)",
         min_length=3,
         max_length=3,
     )

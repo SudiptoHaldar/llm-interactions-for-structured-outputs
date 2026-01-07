@@ -35,50 +35,17 @@ class TestAI21Provider:
             AI21Provider()
 
     @patch.dict("os.environ", {"AI21_API_KEY": "test-key"})
-    def test_get_model_identity_parses_response(self) -> None:
-        """Test get_model_identity parses response correctly."""
-        mock_response = MagicMock()
-        mock_response.choices = [
-            MagicMock(
-                message=MagicMock(
-                    content="Model Provider: AI21 | Model Name: jamba-mini"
-                )
-            )
-        ]
-
+    def test_get_model_identity_returns_hardcoded_values(self) -> None:
+        """Test get_model_identity returns hardcoded provider and model name."""
         with patch(
             "process_structured_output.providers.ai21_provider.AI21Client"
-        ) as mock_ai21:
-            mock_client = MagicMock()
-            mock_client.chat.completions.create.return_value = mock_response
-            mock_ai21.return_value = mock_client
-
+        ):
             provider = AI21Provider()
             identity = provider.get_model_identity()
 
+            # Hardcoded values - no API call made
             assert identity.model_provider == "AI21"
             assert identity.model_name == "jamba-mini"
-
-    @patch.dict("os.environ", {"AI21_API_KEY": "test-key"})
-    def test_get_model_identity_raises_on_invalid_format(self) -> None:
-        """Test get_model_identity raises on invalid response format."""
-        mock_response = MagicMock()
-        mock_response.choices = [
-            MagicMock(
-                message=MagicMock(content="I am Jamba")
-            )
-        ]
-
-        with patch(
-            "process_structured_output.providers.ai21_provider.AI21Client"
-        ) as mock_ai21:
-            mock_client = MagicMock()
-            mock_client.chat.completions.create.return_value = mock_response
-            mock_ai21.return_value = mock_client
-
-            provider = AI21Provider()
-            with pytest.raises(ValueError, match="Could not parse"):
-                provider.get_model_identity()
 
     @patch.dict("os.environ", {"AI21_API_KEY": "test-key"})
     def test_get_country_info_parses_json(self) -> None:
