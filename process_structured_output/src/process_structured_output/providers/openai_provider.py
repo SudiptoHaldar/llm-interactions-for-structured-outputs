@@ -2,13 +2,49 @@
 
 import json
 import os
-import re
+import time
 
 from dotenv import load_dotenv
 from openai import OpenAI
 from pydantic import ValidationError
 
 from process_structured_output.models.continent import ContinentInfo, ModelIdentity
+from process_structured_output.models.country import (
+    CitiesResponse,
+    CityInfo,
+    CountryInfo,
+)
+from process_structured_output.prompts import (
+    CITY_SYSTEM_PROMPT,
+    COUNTRY_SYSTEM_PROMPT,
+    get_cities_user_prompt,
+    get_country_user_prompt,
+    truncate_city_strings,
+    truncate_country_strings,
+)
+
+# Retry configuration
+MAX_RETRIES = 3
+RETRY_DELAY = 1.0
+
+
+def _sanitize_city_data(city: dict) -> dict:
+    """Sanitize city data from LLM responses.
+
+    Handles common issues:
+    - Converts empty/invalid airport_code to None (some cities lack airports)
+
+    Args:
+        city: Dictionary of city field values
+
+    Returns:
+        Dictionary with sanitized values
+    """
+    if "airport_code" in city:
+        code = city["airport_code"]
+        if code is None or (isinstance(code, str) and len(code) < 3):
+            city["airport_code"] = None
+    return city
 
 
 class OpenAIProvider:
@@ -30,10 +66,13 @@ class OpenAIProvider:
 
     def get_model_identity(self) -> ModelIdentity:
         """
-        Ask OpenAI which model is responding.
+        Return hardcoded model identity for OpenAI.
+
+        Note: LLMs cannot reliably self-identify as they may have been trained
+        on data from other models. Using hardcoded values ensures consistency.
 
         Returns:
-            ModelIdentity with model_provider and model_name
+            ModelIdentity with model_provider="OpenAI" and model_name
 
         Example:
             >>> provider = OpenAIProvider()
@@ -41,33 +80,9 @@ class OpenAIProvider:
             >>> print(identity.model_provider)
             OpenAI
         """
-        response = self.client.chat.completions.create(
-            model=self.model,
-            messages=[
-                {
-                    "role": "user",
-                    "content": (
-                        "Who is answering this question? Response should be in the "
-                        "form of 'Model Provider: {model_provider} | "
-                        "Model Name: {model_name}'"
-                    ),
-                }
-            ],
-            max_tokens=100,
-        )
-
-        content = response.choices[0].message.content or ""
-
-        # Parse response: "Model Provider: OpenAI | Model Name: gpt-4o"
-        pattern = r"Model Provider:\s*([^|]+)\s*\|\s*Model Name:\s*(.+)"
-        match = re.search(pattern, content, re.IGNORECASE)
-
-        if not match:
-            raise ValueError(f"Could not parse model identity from: {content}")
-
         return ModelIdentity(
-            model_provider=match.group(1).strip(),
-            model_name=match.group(2).strip(),
+            model_provider="OpenAI",
+            model_name=self.model,
         )
 
     def get_continent_info(self, continent_name: str) -> ContinentInfo:
@@ -124,3 +139,84 @@ class OpenAIProvider:
             return ContinentInfo(**data)
         except (json.JSONDecodeError, ValidationError) as e:
             raise ValueError(f"Failed to parse continent info: {e}") from e
+
+    def get_country_info(self, country_name: str) -> CountryInfo:
+        """Get structured country information from OpenAI."""
+        response = self.client.chat.completions.create(
+            model=self.model,
+            messages=[
+                {"role": "system", "content": COUNTRY_SYSTEM_PROMPT},
+                {"role": "user", "content": get_country_user_prompt(country_name)},
+            ],
+            response_format={"type": "json_object"},
+        )
+
+        content = response.choices[0].message.content or "{}"
+        try:
+            data = json.loads(content)
+            if not data:
+                raise ValueError("Empty JSON response from OpenAI")
+            # Truncate strings to enforce character limits
+            data = truncate_country_strings(data)
+            return CountryInfo(**data)
+        except json.JSONDecodeError as e:
+            raise ValueError(f"Failed to parse country info: {e}") from e
+        except ValidationError as e:
+            raise ValueError(f"Failed to parse country info: {e}") from e
+
+    def get_country_info_with_retry(
+        self, country_name: str, max_retries: int = MAX_RETRIES
+    ) -> CountryInfo:
+        """Get country info with retry logic."""
+        last_error: Exception | None = None
+        for attempt in range(max_retries):
+            try:
+                return self.get_country_info(country_name)
+            except Exception as e:
+                last_error = e
+                if attempt < max_retries - 1:
+                    time.sleep(RETRY_DELAY)
+        raise ValueError(
+            f"Failed after {max_retries} retries: {last_error}"
+        ) from last_error
+
+    def get_cities_info(self, country_name: str) -> list[CityInfo]:
+        """Get structured city information from OpenAI."""
+        response = self.client.chat.completions.create(
+            model=self.model,
+            messages=[
+                {"role": "system", "content": CITY_SYSTEM_PROMPT},
+                {"role": "user", "content": get_cities_user_prompt(country_name)},
+            ],
+            response_format={"type": "json_object"},
+        )
+
+        content = response.choices[0].message.content or "{}"
+        try:
+            data = json.loads(content)
+            # Sanitize and truncate each city before validation
+            if "cities" in data:
+                data["cities"] = [
+                    truncate_city_strings(_sanitize_city_data(c))
+                    for c in data["cities"]
+                ]
+            cities_response = CitiesResponse(**data)
+            return cities_response.cities
+        except (json.JSONDecodeError, ValidationError) as e:
+            raise ValueError(f"Failed to parse cities info: {e}") from e
+
+    def get_cities_info_with_retry(
+        self, country_name: str, max_retries: int = MAX_RETRIES
+    ) -> list[CityInfo]:
+        """Get cities info with retry logic."""
+        last_error: Exception | None = None
+        for attempt in range(max_retries):
+            try:
+                return self.get_cities_info(country_name)
+            except Exception as e:
+                last_error = e
+                if attempt < max_retries - 1:
+                    time.sleep(RETRY_DELAY)
+        raise ValueError(
+            f"Failed after {max_retries} retries: {last_error}"
+        ) from last_error

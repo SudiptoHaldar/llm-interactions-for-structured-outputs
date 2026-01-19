@@ -7,9 +7,14 @@ requires-python = ">=3.11"
 dependencies = [
     "openai>=1.0.0",
     "google-genai>=0.1.0",
+    "ai21>=3.0.0",
+    "anthropic>=0.40.0",
+    "cohere>=5.0.0",
     "pydantic>=2.0.0",
     "psycopg2-binary>=2.9.0",
     "python-dotenv>=1.0.0",
+    "groq>=1.0.0",
+    "mistralai>=1.10.0",
 ]
 
 [project.optional-dependencies]
@@ -23,6 +28,15 @@ dev = [
 
 [project.scripts]
 continent-info = "process_structured_output.cli:main"
+country-info = "process_structured_output.cli_country:main"
+all-countries-ai21 = "process_structured_output.cli_all_countries_ai21:main"
+all-countries-anthropic = "process_structured_output.cli_all_countries_anthropic:main"
+all-countries-cohere = "process_structured_output.cli_all_countries_cohere:main"
+all-countries-deepseek = "process_structured_output.cli_all_countries_deepseek:main"
+all-countries-google = "process_structured_output.cli_all_countries_google:main"
+all-countries-groq = "process_structured_output.cli_all_countries_groq:main"
+all-countries-mistral = "process_structured_output.cli_all_countries_mistral:main"
+all-countries-openai = "process_structured_output.cli_all_countries_openai:main"
 
 [build-system]
 requires = ["hatchling"]
@@ -61,4 +75,24 @@ ignore_missing_imports = true
 
 [[tool.mypy.overrides]]
 module = ["google", "google.genai", "google.genai.*"]
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = ["ai21", "ai21.*"]
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = ["utilities", "utilities.*"]
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = ["anthropic", "anthropic.*"]
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = ["cohere", "cohere.*"]
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = ["mistralai", "mistralai.*"]
 ignore_missing_imports = true

@@ -7,6 +7,7 @@ import psycopg2
 from dotenv import load_dotenv
 
 from process_structured_output.models.continent import ContinentInfo, ModelIdentity
+from process_structured_output.models.country import CityInfo, CountryInfo
 
 
 def get_database_url() -> str:
@@ -104,11 +105,11 @@ def upsert_ai_model(
             ai_model_id: int = result[0]
             provider = model_identity.model_provider
             model = model_identity.model_name
-            print(f"✓ Upserted ai_model: {provider}/{model} (id={ai_model_id})")
+            print(f"[OK] Upserted ai_model: {provider}/{model} (id={ai_model_id})")
             return ai_model_id
     except psycopg2.Error as e:
         conn.rollback()
-        print(f"✗ Error upserting ai_model: {e}")
+        print(f"[X] Error upserting ai_model: {e}")
         raise
     finally:
         conn.close()
@@ -177,11 +178,239 @@ def upsert_continent(
                 raise ValueError("Failed to upsert continent - no ID returned")
 
             continent_id: int = result[0]
-            print(f"✓ Upserted continent: {continent_name} (id={continent_id})")
+            print(f"[OK] Upserted continent: {continent_name} (id={continent_id})")
             return continent_id
     except psycopg2.Error as e:
         conn.rollback()
-        print(f"✗ Error upserting continent: {e}")
+        print(f"[X] Error upserting continent: {e}")
+        raise
+    finally:
+        conn.close()
+
+
+def get_continent_id(
+    continent_name: str,
+    database_url: str | None = None,
+) -> int | None:
+    """
+    Get continent_id by continent name.
+
+    Args:
+        continent_name: Name of the continent
+        database_url: Optional database URL
+
+    Returns:
+        continent_id or None if not found
+    """
+    conn = get_connection(database_url)
+    try:
+        with conn.cursor() as cursor:
+            cursor.execute(
+                "SELECT continent_id FROM continents WHERE name = %s",
+                (continent_name,),
+            )
+            result = cursor.fetchone()
+            return result[0] if result else None
+    finally:
+        conn.close()
+
+
+def upsert_country(
+    country_name: str,
+    country_info: CountryInfo,
+    ai_model_id: int,
+    continent_id: int | None,
+    database_url: str | None = None,
+) -> int:
+    """
+    Upsert country into database and return country_id.
+
+    Args:
+        country_name: Name of the country
+        country_info: CountryInfo with structured data
+        ai_model_id: FK to ai_models table
+        continent_id: FK to continents table (can be None)
+        database_url: Optional database URL
+
+    Returns:
+        country_id of the upserted record
+
+    Example:
+        >>> info = CountryInfo(description="...", area_sq_mile=356669, ...)
+        >>> country_id = upsert_country("Nigeria", info, 1, 1)
+        >>> print(country_id)
+        1
+    """
+    conn = get_connection(database_url)
+    try:
+        conn.autocommit = False
+        with conn.cursor() as cursor:
+            cursor.execute(
+                """
+                INSERT INTO countries (
+                    name, ai_model_id, continent_id,
+                    description, interesting_fact,
+                    area_sq_mile, area_sq_km, population, ppp, life_expectancy,
+                    travel_risk_level, global_peace_index_score,
+                    global_peace_index_rank, happiness_index_score,
+                    happiness_index_rank, gdp, gdp_growth_rate, inflation_rate,
+                    unemployment_rate, govt_debt, credit_rating, poverty_rate,
+                    gini_coefficient, military_spending, gdp_per_capita
+                )
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
+                        %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                ON CONFLICT (name)
+                DO UPDATE SET
+                    ai_model_id = EXCLUDED.ai_model_id,
+                    continent_id = EXCLUDED.continent_id,
+                    description = EXCLUDED.description,
+                    interesting_fact = EXCLUDED.interesting_fact,
+                    area_sq_mile = EXCLUDED.area_sq_mile,
+                    area_sq_km = EXCLUDED.area_sq_km,
+                    population = EXCLUDED.population,
+                    ppp = EXCLUDED.ppp,
+                    life_expectancy = EXCLUDED.life_expectancy,
+                    travel_risk_level = EXCLUDED.travel_risk_level,
+                    global_peace_index_score = EXCLUDED.global_peace_index_score,
+                    global_peace_index_rank = EXCLUDED.global_peace_index_rank,
+                    happiness_index_score = EXCLUDED.happiness_index_score,
+                    happiness_index_rank = EXCLUDED.happiness_index_rank,
+                    gdp = EXCLUDED.gdp,
+                    gdp_growth_rate = EXCLUDED.gdp_growth_rate,
+                    inflation_rate = EXCLUDED.inflation_rate,
+                    unemployment_rate = EXCLUDED.unemployment_rate,
+                    govt_debt = EXCLUDED.govt_debt,
+                    credit_rating = EXCLUDED.credit_rating,
+                    poverty_rate = EXCLUDED.poverty_rate,
+                    gini_coefficient = EXCLUDED.gini_coefficient,
+                    military_spending = EXCLUDED.military_spending,
+                    gdp_per_capita = EXCLUDED.gdp_per_capita,
+                    updated_at = CURRENT_TIMESTAMP
+                RETURNING country_id
+                """,
+                (
+                    country_name,
+                    ai_model_id,
+                    continent_id,
+                    country_info.description,
+                    country_info.interesting_fact,
+                    country_info.area_sq_mile,
+                    country_info.area_sq_km,
+                    country_info.population,
+                    country_info.ppp,
+                    country_info.life_expectancy,
+                    country_info.travel_risk_level,
+                    country_info.global_peace_index_score,
+                    country_info.global_peace_index_rank,
+                    country_info.happiness_index_score,
+                    country_info.happiness_index_rank,
+                    country_info.gdp,
+                    country_info.gdp_growth_rate,
+                    country_info.inflation_rate,
+                    country_info.unemployment_rate,
+                    country_info.govt_debt,
+                    country_info.credit_rating,
+                    country_info.poverty_rate,
+                    country_info.gini_coefficient,
+                    country_info.military_spending,
+                    country_info.gdp_per_capita,
+                ),
+            )
+            result = cursor.fetchone()
+            conn.commit()
+
+            if result is None:
+                raise ValueError("Failed to upsert country - no ID returned")
+
+            country_id: int = result[0]
+            print(f"[OK] Upserted country: {country_name} (id={country_id})")
+            return country_id
+    except psycopg2.Error as e:
+        conn.rollback()
+        print(f"[X] Error upserting country: {e}")
+        raise
+    finally:
+        conn.close()
+
+
+def upsert_city(
+    city_info: CityInfo,
+    country_id: int,
+    database_url: str | None = None,
+) -> int:
+    """
+    Upsert city into database and return city_id.
+
+    Args:
+        city_info: CityInfo with structured data
+        country_id: FK to countries table
+        database_url: Optional database URL
+
+    Returns:
+        city_id of the upserted record
+
+    Example:
+        >>> info = CityInfo(name="Lagos", is_capital=False, ...)
+        >>> city_id = upsert_city(info, 1)
+        >>> print(city_id)
+        1
+    """
+    conn = get_connection(database_url)
+    try:
+        conn.autocommit = False
+        with conn.cursor() as cursor:
+            cursor.execute(
+                """
+                INSERT INTO cities (
+                    country_id, name, is_capital, description, interesting_fact,
+                    area_sq_mile, area_sq_km, population,
+                    sci_score, sci_rank, numbeo_si, numbeo_ci, airport_code
+                )
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                ON CONFLICT (country_id, name)
+                DO UPDATE SET
+                    is_capital = EXCLUDED.is_capital,
+                    description = EXCLUDED.description,
+                    interesting_fact = EXCLUDED.interesting_fact,
+                    area_sq_mile = EXCLUDED.area_sq_mile,
+                    area_sq_km = EXCLUDED.area_sq_km,
+                    population = EXCLUDED.population,
+                    sci_score = EXCLUDED.sci_score,
+                    sci_rank = EXCLUDED.sci_rank,
+                    numbeo_si = EXCLUDED.numbeo_si,
+                    numbeo_ci = EXCLUDED.numbeo_ci,
+                    airport_code = EXCLUDED.airport_code,
+                    updated_at = CURRENT_TIMESTAMP
+                RETURNING city_id
+                """,
+                (
+                    country_id,
+                    city_info.name,
+                    city_info.is_capital,
+                    city_info.description,
+                    city_info.interesting_fact,
+                    city_info.area_sq_mile,
+                    city_info.area_sq_km,
+                    city_info.population,
+                    city_info.sci_score,
+                    city_info.sci_rank,
+                    city_info.numbeo_si,
+                    city_info.numbeo_ci,
+                    city_info.airport_code,
+                ),
+            )
+            result = cursor.fetchone()
+            conn.commit()
+
+            if result is None:
+                raise ValueError("Failed to upsert city - no ID returned")
+
+            city_id: int = result[0]
+            print(f"[OK] Upserted city: {city_info.name} (id={city_id})")
+            return city_id
+    except psycopg2.Error as e:
+        conn.rollback()
+        print(f"[X] Error upserting city: {e}")
         raise
     finally:
         conn.close()

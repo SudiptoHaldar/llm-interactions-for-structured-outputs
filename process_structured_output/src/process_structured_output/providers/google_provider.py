@@ -2,7 +2,7 @@
 
 import json
 import os
-import re
+import time
 
 from dotenv import load_dotenv
 from google import genai
@@ -10,6 +10,51 @@ from google.genai import types
 from pydantic import ValidationError
 
 from process_structured_output.models.continent import ContinentInfo, ModelIdentity
+from process_structured_output.models.country import (
+    CityInfo,
+    CountryInfo,
+)
+from process_structured_output.prompts import (
+    get_cities_user_prompt,
+    get_country_user_prompt,
+    truncate_city_strings,
+    truncate_country_strings,
+)
+
+# Retry configuration
+MAX_RETRIES = 3
+RETRY_DELAY = 1.0  # seconds
+
+
+def _sanitize_city_data(data: dict, max_length: int = 250) -> dict:
+    """
+    Sanitize city data from Gemini responses.
+
+    Handles common issues:
+    - Truncates description/interesting_fact fields that exceed max_length
+    - Converts empty airport_code strings to None
+
+    Args:
+        data: Dictionary of field values
+        max_length: Maximum string length (default 250)
+
+    Returns:
+        Dictionary with sanitized values
+    """
+    # Truncate long text fields
+    text_fields = ["description", "interesting_fact"]
+    for field in text_fields:
+        if field in data and isinstance(data[field], str):
+            if len(data[field]) > max_length:
+                data[field] = data[field][: max_length - 3] + "..."
+
+    # Convert empty airport_code to None (some cities don't have airports)
+    if "airport_code" in data:
+        code = data["airport_code"]
+        if code is None or (isinstance(code, str) and len(code) < 3):
+            data["airport_code"] = None
+
+    return data
 
 
 class GoogleProvider:
@@ -31,10 +76,13 @@ class GoogleProvider:
 
     def get_model_identity(self) -> ModelIdentity:
         """
-        Ask Gemini which model is responding.
+        Return hardcoded model identity for Google Gemini.
+
+        Note: LLMs cannot reliably self-identify as they may have been trained
+        on data from other models. Using hardcoded values ensures consistency.
 
         Returns:
-            ModelIdentity with model_provider and model_name
+            ModelIdentity with model_provider="Google" and model_name
 
         Example:
             >>> provider = GoogleProvider()
@@ -42,30 +90,9 @@ class GoogleProvider:
             >>> print(identity.model_provider)
             Google
         """
-        response = self.client.models.generate_content(
-            model=self.model,
-            contents=(
-                "Who is answering this question? Response should be in the "
-                "form of 'Model Provider: {model_provider} | "
-                "Model Name: {model_name}'"
-            ),
-            config=types.GenerateContentConfig(
-                max_output_tokens=100,
-            ),
-        )
-
-        content = response.text or ""
-
-        # Parse response: "Model Provider: Google | Model Name: gemini-2.5-flash"
-        pattern = r"Model Provider:\s*([^|]+)\s*\|\s*Model Name:\s*(.+)"
-        match = re.search(pattern, content, re.IGNORECASE)
-
-        if not match:
-            raise ValueError(f"Could not parse model identity from: {content}")
-
         return ModelIdentity(
-            model_provider=match.group(1).strip(),
-            model_name=match.group(2).strip(),
+            model_provider="Google",
+            model_name=self.model,
         )
 
     def get_continent_info(self, continent_name: str) -> ContinentInfo:
@@ -110,3 +137,132 @@ class GoogleProvider:
             return ContinentInfo.model_validate_json(content)
         except (json.JSONDecodeError, ValidationError) as e:
             raise ValueError(f"Failed to parse continent info: {e}") from e
+
+    def get_country_info(self, country_name: str) -> CountryInfo:
+        """
+        Get structured country information from Gemini.
+
+        Args:
+            country_name: Name of the country to query
+
+        Returns:
+            CountryInfo with structured data
+
+        Example:
+            >>> provider = GoogleProvider()
+            >>> info = provider.get_country_info("Kenya")
+            >>> print(info.population)
+            54000000
+        """
+        response = self.client.models.generate_content(
+            model=self.model,
+            contents=get_country_user_prompt(country_name),
+            config=types.GenerateContentConfig(
+                response_mime_type="application/json",
+                max_output_tokens=2000,
+            ),
+        )
+
+        content = response.text or "{}"
+
+        try:
+            data = json.loads(content)
+            # Truncate strings to enforce character limits
+            data = truncate_country_strings(data)
+            return CountryInfo(**data)
+        except (json.JSONDecodeError, ValidationError) as e:
+            print(f"\n[DEBUG] Raw JSON response:\n{content[:500]}...")
+            raise ValueError(f"Failed to parse country info: {e}") from e
+
+    def get_country_info_with_retry(self, country_name: str) -> CountryInfo:
+        """
+        Get country info with retry logic for transient failures.
+
+        Args:
+            country_name: Name of the country to query
+
+        Returns:
+            CountryInfo with structured data
+
+        Raises:
+            ValueError: After all retries exhausted
+        """
+        last_error: Exception | None = None
+        for attempt in range(MAX_RETRIES):
+            try:
+                return self.get_country_info(country_name)
+            except ValueError as e:
+                last_error = e
+                if attempt < MAX_RETRIES - 1:
+                    print(f"    [Retry {attempt + 1}/{MAX_RETRIES}] {e}")
+                    time.sleep(RETRY_DELAY)
+        raise ValueError(f"Failed after {MAX_RETRIES} attempts: {last_error}")
+
+    def get_cities_info(self, country_name: str) -> list[CityInfo]:
+        """
+        Get structured city information for a country from Gemini.
+
+        Args:
+            country_name: Name of the country to query cities for
+
+        Returns:
+            List of CityInfo with structured data (up to 5 cities)
+
+        Example:
+            >>> provider = GoogleProvider()
+            >>> cities = provider.get_cities_info("Kenya")
+            >>> print(len(cities))
+            5
+        """
+        response = self.client.models.generate_content(
+            model=self.model,
+            contents=get_cities_user_prompt(country_name),
+            config=types.GenerateContentConfig(
+                response_mime_type="application/json",
+                max_output_tokens=4000,
+            ),
+        )
+
+        content = response.text or '{"cities": []}'
+
+        try:
+            data = json.loads(content)
+            # Handle both formats: direct list or {"cities": [...]}
+            if isinstance(data, list):
+                cities_data = data
+            elif isinstance(data, dict) and "cities" in data:
+                cities_data = data["cities"]
+            else:
+                raise ValueError(f"Unexpected cities format: {type(data)}")
+            # Apply truncation and sanitization
+            return [
+                CityInfo(**truncate_city_strings(_sanitize_city_data(city)))
+                for city in cities_data
+            ]
+        except (json.JSONDecodeError, ValidationError) as e:
+            print(f"\n[DEBUG] Raw cities JSON response:\n{content[:800]}...")
+            raise ValueError(f"Failed to parse cities info: {e}") from e
+
+    def get_cities_info_with_retry(self, country_name: str) -> list[CityInfo]:
+        """
+        Get cities info with retry logic for transient failures.
+
+        Args:
+            country_name: Name of the country to query cities for
+
+        Returns:
+            List of CityInfo with structured data
+
+        Raises:
+            ValueError: After all retries exhausted
+        """
+        last_error: Exception | None = None
+        for attempt in range(MAX_RETRIES):
+            try:
+                return self.get_cities_info(country_name)
+            except ValueError as e:
+                last_error = e
+                if attempt < MAX_RETRIES - 1:
+                    print(f"    [Retry {attempt + 1}/{MAX_RETRIES}] {e}")
+                    time.sleep(RETRY_DELAY)
+        raise ValueError(f"Failed after {MAX_RETRIES} attempts: {last_error}")
