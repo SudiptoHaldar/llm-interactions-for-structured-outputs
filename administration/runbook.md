@@ -384,6 +384,12 @@ python -m database.sql.tables.country create
 
 # 4. Create cities table (has FK to countries)
 python -m database.sql.tables.city create
+
+# 5. Create glossary table (standalone, no FK dependencies)
+python -m database.sql.tables.glossary create
+
+# 6. Populate glossary from CSV
+python -m utilities.glossary --upsert
 ```
 
 #### Migrating Existing Databases
@@ -498,8 +504,39 @@ cleanup_table()
 | poverty_rate | NUMERIC(5,2) | Poverty (%) |
 | gini_coefficient | NUMERIC(5,2) | Gini coefficient |
 | military_spending | NUMERIC(5,2) | Military (% GDP) |
+| gdp_per_capita | NUMERIC(10,2) | GDP per capita (USD) |
 | created_at | TIMESTAMPTZ | Creation time |
 | updated_at | TIMESTAMPTZ | Update time |
+
+#### 5.6.1 Add gdp_per_capita Column
+
+Added in version 1.3.0 - GDP per capita column for economic analysis.
+
+**Apply Migration:**
+
+```bash
+python -m database.sql.tables.country alter_gdp_per_capita
+```
+
+**Rollback (if needed):**
+
+```bash
+python -m database.sql.tables.country rollback_gdp_per_capita
+```
+
+**Using Python:**
+
+```python
+from database.sql.tables.country import alter_gdp_per_capita, rollback_gdp_per_capita
+
+# Apply migration
+alter_gdp_per_capita()
+
+# Rollback if needed
+rollback_gdp_per_capita()
+```
+
+**Note:** The migration preserves all existing data. The gdp_per_capita column will be NULL for existing rows until populated by LLM structured outputs.
 
 ### 5.7 Cities Table
 
@@ -553,6 +590,74 @@ cleanup_table()
 | airport_code | CHAR(3) | IATA airport code |
 | created_at | TIMESTAMPTZ | Creation time |
 | updated_at | TIMESTAMPTZ | Update time |
+
+### 5.8 Glossary Table
+
+The `glossary` table stores definitions and interpretations of economic and quality-of-life indicators used in the application.
+
+**Using CLI:**
+
+```bash
+# Create glossary table
+python -m database.sql.tables.glossary create
+
+# Check if exists
+python -m database.sql.tables.glossary status
+
+# Cleanup (drop table)
+python -m database.sql.tables.glossary cleanup
+```
+
+**Using Python:**
+
+```python
+from database.sql.tables.glossary import create_table, cleanup_table, exists
+
+# Create the glossary table
+create_table()
+
+# Check if table exists
+print(f"Table exists: {exists()}")
+
+# Drop the table (WARNING: deletes all data!)
+cleanup_table()
+```
+
+**Populating the Glossary:**
+
+After creating the table, upsert entries from `glossary/glossary.csv`:
+
+```bash
+# From project root
+
+# Preview what will be upserted
+python -m utilities.glossary --upsert --dry-run
+
+# Upsert entries to database
+python -m utilities.glossary --upsert
+```
+
+**Table Schema:**
+
+| Column | Type | Description |
+|--------|------|-------------|
+| glossary_id | INTEGER IDENTITY | Primary key |
+| entry | VARCHAR(50) | Indicator name (unique) |
+| meaning | TEXT | Full description of the indicator |
+| range | VARCHAR(25) | Valid value range (e.g., "0 - 100") |
+| interpretation | VARCHAR(25) | How to interpret (e.g., "Lower is better") |
+| created_at | TIMESTAMPTZ | Creation time |
+| updated_at | TIMESTAMPTZ | Update time |
+
+**Glossary Entries (8):**
+- Gini Coefficient (0-100, lower is better)
+- PPP (Purchasing Power Parity) (Numeric, lower is better)
+- GPI (Global Peace Index) (1-5, lower is better)
+- Happiness Index (0-10, higher is better)
+- Nominal GDP (Numeric, higher is better)
+- GDP (PPP) (Numeric, higher is better)
+- Travel Risk Level (Level 1-4, lower is better)
+- Poverty Rate (0-100, lower is better)
 
 ---
 
@@ -1098,11 +1203,194 @@ Nigeria: Continent=Africa, LLM=AI21
 | `get_country_info()` | `country_name: str` | `CountryInfo` | Country's continent & LLM |
 | `reload_data()` | None | `None` | Force reload from CSV |
 
-### 7.4 Running Tests
+### 7.4 Using the Color Palette Module
+
+The `color_palette` module maps numeric values to a bad-neutral-good color scale (red-white-green).
+
+**Using Python:**
+
+```python
+from utilities.color_palette import (
+    get_color_for_value,
+    get_color_for_normalized_value,
+    GOOD_COLOR,
+    NEUTRAL_COLOR,
+    BAD_COLOR,
+)
+
+# Map a value to a color (higher is better by default)
+color = get_color_for_value(90, 0, 100)  # Returns greenish color
+color = get_color_for_value(50, 0, 100)  # Returns off-white
+color = get_color_for_value(10, 0, 100)  # Returns reddish color
+
+# Lower is better (e.g., unemployment rate, inflation)
+color = get_color_for_value(5, 0, 20, higher_is_better=False)   # Greenish
+color = get_color_for_value(15, 0, 20, higher_is_better=False)  # Reddish
+
+# Asymmetric gradients (custom median value)
+# Example: attribute where 0=bad, 100=good, but median is at 70
+color = get_color_for_value(70, 0, 100, median_val=70)  # Neutral (#FFFFFA)
+color = get_color_for_value(94, 0, 100, median_val=70)  # Greenish (#33FF32)
+color = get_color_for_value(28, 0, 100, median_val=70)  # Reddish (#FF6664)
+
+# Example: lower is better with asymmetric median at 20
+color = get_color_for_value(10, 0, 100, higher_is_better=False, median_val=20)
+color = get_color_for_value(60, 0, 100, higher_is_better=False, median_val=20)
+
+# Use normalized values (0.0 to 1.0)
+color = get_color_for_normalized_value(0.0)   # Red (#FF0000)
+color = get_color_for_normalized_value(0.5)   # Off-white (#FFFFFA)
+color = get_color_for_normalized_value(1.0)   # Green (#00FF00)
+
+# Access color constants
+print(GOOD_COLOR)     # #00FF00 (green)
+print(NEUTRAL_COLOR)  # #FFFFFA (off-white)
+print(BAD_COLOR)      # #FF0000 (red)
+```
+
+**Using CLI:**
+
+```bash
+# From utilities directory
+cd utilities
+
+# Get color for a value (default range 0-100, higher is better)
+uv run python color_palette.py 90
+
+# Custom range
+uv run python color_palette.py 20 --min 0 --max 100
+
+# Lower is better (inverted scale)
+uv run python color_palette.py 5 --lower-is-better
+
+# Asymmetric median (median at 70 instead of 50)
+uv run python color_palette.py 94 --median 70
+uv run python color_palette.py 28 --median 70
+
+# Lower is better with asymmetric median
+uv run python color_palette.py 10 --median 20 --lower-is-better
+uv run python color_palette.py 60 --median 20 --lower-is-better
+```
+
+**Expected output (asymmetric example):**
+
+```
+Value: 94.0
+Range: 0.0 to 100.0
+Median: 70.0
+Scale: Higher is better
+Color: #33FF32
+```
+
+**Color Scale:**
+
+| Value | higher_is_better=True | higher_is_better=False |
+|-------|----------------------|------------------------|
+| 0% (min) | Red (#FF0000) | Green (#00FF00) |
+| 25% | Red-to-white | Green-to-white |
+| 50% | Off-white (#FFFFFA) | Off-white (#FFFFFA) |
+| 75% | White-to-green | White-to-red |
+| 100% (max) | Green (#00FF00) | Red (#FF0000) |
+
+**Asymmetric Gradient:** When `median_val` is specified, the neutral point (off-white)
+is at that value instead of the midpoint. The gradient interpolates between:
+- Bad → Median: red to off-white
+- Median → Good: off-white to green
+
+### 7.5 Using the Glossary Module
+
+The `glossary` module reads economic indicator definitions from `glossary/glossary.csv` and provides functions to query entries and upsert them to the database.
+
+**Using Python:**
+
+```python
+from utilities.glossary import (
+    get_glossary_entries,
+    get_entry,
+    reload_entries,
+    upsert_glossary_entries,
+    GlossaryEntry,
+)
+
+# Get all glossary entries
+entries = get_glossary_entries()
+print(f"Total entries: {len(entries)}")  # 8
+
+# Get a specific entry
+gini = get_entry("Gini Coefficient")
+print(f"Entry: {gini.entry}")
+print(f"Meaning: {gini.meaning}")
+print(f"Range: {gini.range}")  # "0 - 100"
+print(f"Interpretation: {gini.interpretation}")  # "Lower is better"
+
+# Case-insensitive lookup
+ppp = get_entry("ppp (purchasing power parity)")
+print(f"PPP: {ppp.entry}")
+
+# Force reload from CSV
+reload_entries()
+
+# Upsert entries to database (dry run)
+count = upsert_glossary_entries(dry_run=True)
+
+# Upsert entries to database (actual)
+count = upsert_glossary_entries()
+print(f"Upserted {count} entries")
+```
+
+**Using CLI:**
+
+```bash
+# From project root
+
+# Display all glossary entries
+python -m utilities.glossary
+
+# Lookup a specific entry
+python -m utilities.glossary "Gini Coefficient"
+python -m utilities.glossary "GPI (Global Peace Index)"
+
+# Preview upsert (dry run)
+python -m utilities.glossary --upsert --dry-run
+
+# Upsert entries to database
+python -m utilities.glossary --upsert
+```
+
+**Expected output (show all):**
+
+```
+=== Glossary Entries ===
+
+* Gini Coefficient
+  Range: 0 - 100
+  Interpretation: Lower is better
+  Meaning: The Gini Coefficient is the most widely used statistical measure...
+
+* PPP (Purchasing Power Parity)
+  Range: Numeric
+  Interpretation: Lower is better
+  Meaning: This is a metric used by economists to compare the standard of l...
+
+... (6 more entries) ...
+
+Total Entries: 8
+```
+
+**API Reference:**
+
+| Method | Parameters | Returns | Description |
+|--------|------------|---------|-------------|
+| `get_glossary_entries()` | None | `list[GlossaryEntry]` | All glossary entries |
+| `get_entry()` | `entry_name: str` | `GlossaryEntry` | Specific entry (case-insensitive) |
+| `reload_entries()` | None | `None` | Force reload from CSV |
+| `upsert_glossary_entries()` | `entries: list`, `dry_run: bool` | `int` | Upsert to database |
+
+### 7.6 Running Tests
 
 ```bash
 cd utilities
-uv run pytest -v              # Run tests
+uv run pytest -v              # Run tests (98 tests)
 uv run ruff check .           # Linting
 uv run mypy .                 # Type checking
 ```
@@ -1241,12 +1529,309 @@ The landing page includes interactive enhancements:
    - Tap the same continent again to deselect
    - Returns to showing globetrotter image and title
 
+### 8.10 Navigation Features (v3)
+
+The landing page includes navigation infrastructure:
+
+1. **Globe FAB Menu** (bottom-right)
+   - Expandable floating action button with globe icon
+   - Uses `flutter_expandable_fab` package v2.5.2
+   - Tap to expand and reveal menu items:
+     - "Global Heatmaps" - navigates to Global Heatmaps screen
+     - "Glossary" - shows economic indicator definitions
+     - "Travel Safety" - travel advisories (future)
+   - Overlay blur effect when expanded
+   - Haptic feedback on selection
+
+2. **Navigation Drawer** (swipe from left)
+   - Navy blue sidebar with Material 3 styling
+   - "Travel HQ" header with info icon
+   - Same 3 menu items as FAB menu
+   - M3 stadium shape for item selection
+   - Outlined/filled icon variants for selected state
+
+3. **Breadcrumb** (below carousel)
+   - Shows current location: "Travel HQ"
+   - Home icon with chevron separator
+   - M3 surface colors
+
+**Widget files:**
+- `lib/widgets/globe_fab_menu.dart` - FAB menu widget
+- `lib/widgets/app_navigation_drawer.dart` - Navigation drawer
+- `lib/widgets/breadcrumb.dart` - Breadcrumb navigation
+
+**Dependencies:**
+```yaml
+flutter_expandable_fab: ^2.5.2
+```
+
+### 8.11 Global Heatmaps Screen (v4)
+
+The Global Heatmaps screen displays a color-coded grid of 80 countries across 8 LLM providers.
+
+**Accessing the screen:**
+- Tap "Global Heatmaps" in the FAB menu or navigation drawer
+
+**Features:**
+
+1. **Heatmap Grid**
+   - Columns: 8 LLM providers (AI21, Anthropic, Cohere, DeepSeek, Google, Groq, Mistral, OpenAI)
+   - Rows: 6 continents (Africa, Asia, Europe, North America, Oceania, South America)
+   - Each cell shows a country name with color-coded background
+
+2. **Color Scale**
+   - Red (#C62828): Bad/low value
+   - Off-white (#FFFFFA): Neutral/middle value
+   - Green (#2E7D32): Good/high value
+   - Direction depends on attribute (e.g., high life expectancy = good, high inflation = bad)
+
+3. **Attribute Dropdown**
+   - 10 selectable attributes:
+     - PPP (Purchasing Power Parity) - higher is better
+     - Life Expectancy - higher is better
+     - Global Peace Index - lower is better (1.0-5.0 fixed range)
+     - Happiness Index - higher is better
+     - GDP - higher is better
+     - GDP Growth Rate - higher is better
+     - Inflation Rate - lower is better
+     - Unemployment Rate - lower is better
+     - Govt Debt (% GDP) - lower is better
+     - Poverty Rate - lower is better
+
+4. **Filters Panel**
+   - Continent checkboxes: Show/hide continent rows
+   - LLM checkboxes: Show/hide provider columns
+   - All selected by default
+
+**Widget files:**
+- `lib/screens/global_heatmaps_screen.dart` - Main screen
+- `lib/widgets/heatmap_grid.dart` - Grid layout with country-LLM mapping
+- `lib/widgets/heatmap_cell.dart` - Individual color-coded cell
+- `lib/widgets/heatmap_filters.dart` - Filter checkboxes
+- `lib/widgets/heatmap_attribute_dropdown.dart` - Attribute selector
+- `lib/utilities/color_palette.dart` - Color interpolation utility
+- `lib/models/country.dart` - Country data model
+- `lib/services/country_repository.dart` - Data fetching repository
+
+**API Dependency:**
+The screen fetches country data from the backend API:
+```
+GET /api/v1/countries/
+```
+
+Ensure the backend is running and populated with country data before using this screen.
+
+**State Persistence (v11):**
+The selected attribute persists during navigation. When you select "Life Expectancy", navigate away to Glossary or Travel Safety, then return to Global Heatmaps, the screen remembers your selection. This is session-based persistence (resets on app restart).
+
+### 8.12 Glossary Screen (v6)
+
+The Glossary screen displays definitions of 8 economic and quality-of-life indicators used throughout the application.
+
+**Accessing the screen:**
+- Tap "Glossary" in the FAB menu or navigation drawer
+- Click "Glossary" in the left navigation panel
+
+**Features:**
+
+1. **Header Section**
+   - Title: "Economic & Quality-of-Life Indicators"
+   - Entry count: "8 definitions"
+
+2. **Legend**
+   - Green trending-up icon: "Higher is better"
+   - Red trending-down icon: "Lower is better"
+
+3. **Expandable Cards**
+   - Each glossary entry is displayed as an expandable card
+   - Shows entry name, range, and interpretation badge
+   - Tap to expand and see full meaning/definition
+   - Color-coded icons and badges based on interpretation
+
+**Glossary Entries:**
+
+| Entry | Range | Interpretation |
+|-------|-------|----------------|
+| GDP (PPP) | Numeric | Higher is better |
+| Gini Coefficient | 0 - 100 | Lower is better |
+| GPI (Global Peace Index) | 1 - 5 | Lower is better |
+| Happiness Index | 0 - 10 | Higher is better |
+| Nominal GDP | Numeric | Higher is better |
+| Poverty Rate | 0 - 100 | Lower is better |
+| PPP (Purchasing Power Parity) | Numeric | Lower is better |
+| Travel Risk Level | Level 1 - Level 4 | Lower is better |
+
+**Widget files:**
+- `lib/models/glossary_entry.dart` - Static glossary data model
+- `lib/widgets/glossary_content.dart` - Main content widget
+- `lib/widgets/glossary_card.dart` - Expandable card widget
+
+**No API dependency:** Data is embedded in the app (static entries).
+
+### 8.13 Travel Safety Screen (v7)
+
+The Travel Safety screen displays city-level safety charts for any selected country.
+
+**Accessing the screen:**
+- Tap "Travel Safety" in the FAB menu or navigation drawer
+- Click "Travel Safety" in the left navigation panel
+
+**Features:**
+
+1. **Country Selector**
+   - Dropdown menu to select a country
+   - Loading indicator while fetching countries
+   - Location icon prefix
+
+2. **City Safety Bar Chart**
+   - Uses fl_chart library for data visualization
+   - Displays 3 metrics per city:
+     - SCI Score (EIU Safe Cities Index) - Blue
+     - Numbeo Safety Index - Green
+     - Numbeo Crime Index - Red
+   - Capital cities marked with star icons
+   - Rotated labels for >4 cities
+   - Touch tooltips showing metric values
+
+3. **Legend**
+   - Color-coded boxes for each metric
+   - Interpretation hints: "(Higher is better)" or "(Lower is better)"
+
+4. **States**
+   - Loading state with spinner
+   - Empty state with "Select a country" prompt
+   - Error state with retry button
+   - No data state for countries without cities
+
+**Widget files:**
+- `lib/models/city.dart` - City data model
+- `lib/services/city_repository.dart` - Data fetching repository
+- `lib/widgets/country_selector.dart` - Country dropdown
+- `lib/widgets/city_safety_chart.dart` - fl_chart bar chart
+- `lib/widgets/travel_safety_content.dart` - Main content widget
+
+**Dependencies:**
+```yaml
+fl_chart: ^0.70.2
+```
+
+**API Dependency:**
+The screen fetches city data from the backend API:
+```
+GET /api/v1/cities/?country_id={id}
+```
+
+Ensure the backend is running and populated with city data before using this screen.
+
+### 8.14 Continent Countries Flow (v8)
+
+When a continent is clicked in the carousel, the app shows countries from that continent with city safety charts.
+
+**User Flow:**
+1. Click a continent in the carousel (e.g., "Europe")
+2. Left panel shows countries from that continent
+3. Right area shows **Continent Landing Page** (v10) with:
+   - Description in styled box
+   - Area (sq miles + sq km)
+   - Population (formatted with Million/Billion suffix)
+   - Number of countries
+4. Click a country (e.g., "Croatia")
+5. Right area shows city safety bar charts
+6. Click continent name in breadcrumb to return to continent landing page
+
+**Features:**
+
+1. **Continent Landing Page** (v10)
+   - Description in primaryContainer styled box
+   - Area: "3.9 Million Square Miles (10 Million Square KM)"
+   - Population: "746.4 Million"
+   - Countries: "44"
+   - Loading and error states with retry
+
+2. **Continent Countries Panel**
+   - Header with continent name and country count
+   - Scrollable list of countries with flag icons
+   - Selected country highlighted
+   - Loading and empty states
+
+3. **City Safety Chart**
+   - Reuses existing CitySafetyChart widget
+   - Shows SCI Score, Safety Index, Crime Index
+   - Capital city indicators
+
+4. **Breadcrumb Navigation**
+   - Shows "Travel HQ > {Continent}" when continent selected
+   - Shows "Travel HQ > {Continent} > {Country}" when country selected
+   - Click continent name in breadcrumb to return to continent landing page
+
+5. **Antarctica Special Case**
+   - Shows "No countries in database" message
+   - Displays research stations note
+
+**Widget files:**
+- `lib/models/continent.dart` - Continent data model with formatting
+- `lib/services/continent_repository.dart` - Repository for continent API
+- `lib/widgets/continent_info_panel.dart` - Continent landing page panel
+- `lib/widgets/continent_countries_panel.dart` - Country list panel
+- `lib/widgets/continent_cities_content.dart` - Main content widget
+- `lib/screens/landing_screen.dart` - Updated with continent content view
+
+**API Dependency:**
+The screen fetches continent, country, and city data from the backend API:
+```
+GET /api/v1/continents/name/{continent_name}
+GET /api/v1/countries/continent/name/{continent_name}
+GET /api/v1/cities/?country_id={id}
+```
+
+Ensure the backend is running and populated with continent/country/city data.
+
+---
+
+## 8.13 Architecture Documentation
+
+The project includes comprehensive architecture documentation with Mermaid diagrams.
+
+**Location**: `llm-interaction-strategies/llm-interaction-architecture.md`
+
+**Contents**:
+- System Overview (5-layer architecture diagram)
+- Technology Stack (Flutter, FastAPI, PostgreSQL, Pydantic, SQLAlchemy)
+- LLM Integration Strategy (structured output flow, validation paths)
+- Database Schema (ER diagram with all 5 tables)
+- API Layer (endpoint structure)
+- Flutter Application (component architecture)
+- CLI Tools (available commands)
+- Data Flow (end-to-end pipeline)
+
+**Viewing Diagrams**:
+- Preview markdown in VS Code with Mermaid extension
+- Copy diagrams to https://mermaid.live/ for interactive editing
+- GitHub renders Mermaid diagrams in markdown files automatically
+
+**Related Files**:
+- `llm-interaction-strategies/llm-strategy-comparison.md` - LLM provider comparison
+- `.claude/agents/mermaid-expert.md` - Mermaid diagram guidelines
+
 ---
 
 ## 9. Version History
 
 | Version | Date | Description |
 |---------|------|-------------|
+| 1.12.0 | 2026-01-19 | Documentation: Architecture diagrams with Mermaid (system, LLM, database, Flutter) |
+| 1.11.0 | 2026-01-19 | Flutter: Global Heatmaps statefulness - attribute selection persists during navigation |
+| 1.10.0 | 2026-01-18 | Flutter: Continent landing page with description, area, population, countries count |
+| 1.9.0 | 2026-01-18 | Flutter: Global Heatmaps enhancements - asymmetric color gradients with medianVal, GDP/GDP per capita attributes |
+| 1.8.0 | 2026-01-17 | Database: Add gdp_per_capita column to countries table |
+| 1.7.0 | 2026-01-10 | Flutter: Continent countries flow - carousel → countries → city charts |
+| 1.6.0 | 2026-01-10 | Flutter: Travel Safety screen with city safety bar charts using fl_chart |
+| 1.5.0 | 2026-01-10 | Flutter: Glossary screen with 8 expandable indicator definitions |
+| 1.4.0 | 2026-01-10 | Utilities: glossary module with CSV parsing and database upsert |
+| 1.3.0 | 2026-01-08 | Flutter: Global Heatmaps screen with 80 countries, 8 LLMs, 10 attributes |
+| 1.2.0 | 2026-01-08 | Flutter: FAB menu, navigation drawer, breadcrumb (M3 compliant) |
+| 1.1.0 | 2026-01-08 | Utilities: color_palette module for bad-neutral-good color scale |
+| 1.0.0 | 2026-01-08 | Major release with Flutter landing page and all LLM providers |
 | 0.29.0 | 2026-01-06 | Landing page enhancements: selection, ripple, hover, dynamic hero, auto-center |
 | 0.28.0 | 2026-01-06 | Flutter landing page with continent carousel and hero image |
 | 0.27.0 | 2026-01-05 | Batch processing CLI for all OpenAI countries |

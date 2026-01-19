@@ -44,7 +44,7 @@ from process_structured_output.providers.openai_provider import (  # noqa: E402
 
 def process_country(
     country_name: str,
-    provider: str = "ai21",
+    provider: str | None = None,
     skip_cities: bool = False,
 ) -> dict[str, int | list[int] | None]:
     """
@@ -52,7 +52,7 @@ def process_country(
 
     Args:
         country_name: Name of the country to query
-        provider: LLM provider to use (default: ai21)
+        provider: LLM provider to use (None = auto-detect from countries.csv)
         skip_cities: Whether to skip city retrieval
 
     Returns:
@@ -63,17 +63,26 @@ def process_country(
     """
     print(f"\n=== Processing: {country_name} ===\n")
 
-    # Look up continent from utilities
+    # Look up continent and assigned LLM from utilities
     from utilities.countries_info import get_country_info as get_country_lookup
 
     try:
         country_lookup = get_country_lookup(country_name)
         continent_name = country_lookup.continent
+        assigned_llm = country_lookup.llm
         print(f"Continent lookup: {country_name} -> {continent_name}")
+
+        # Auto-detect provider if not specified
+        if provider is None:
+            provider = assigned_llm.lower()
+            print(f"Provider auto-detected: {assigned_llm}")
     except ValueError:
         continent_name = None
         print(f"Warning: Country '{country_name}' not in countries.csv")
         print("         Continent will be set to NULL in database")
+        if provider is None:
+            provider = "ai21"  # Default fallback
+            print(f"         Using default provider: {provider}")
 
     # Initialize provider
     llm_provider: (
@@ -201,8 +210,8 @@ Examples:
             "ai21", "anthropic", "cohere", "deepseek", "google", "groq",
             "mistral", "openai"
         ],
-        default="ai21",
-        help="LLM provider to use (default: ai21)",
+        default=None,
+        help="LLM provider to use (default: auto-detect from countries.csv)",
     )
     parser.add_argument(
         "--skip-cities",

@@ -255,10 +255,10 @@ def upsert_country(
                     global_peace_index_rank, happiness_index_score,
                     happiness_index_rank, gdp, gdp_growth_rate, inflation_rate,
                     unemployment_rate, govt_debt, credit_rating, poverty_rate,
-                    gini_coefficient, military_spending
+                    gini_coefficient, military_spending, gdp_per_capita
                 )
                 VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
-                        %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                        %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                 ON CONFLICT (name)
                 DO UPDATE SET
                     ai_model_id = EXCLUDED.ai_model_id,
@@ -284,6 +284,7 @@ def upsert_country(
                     poverty_rate = EXCLUDED.poverty_rate,
                     gini_coefficient = EXCLUDED.gini_coefficient,
                     military_spending = EXCLUDED.military_spending,
+                    gdp_per_capita = EXCLUDED.gdp_per_capita,
                     updated_at = CURRENT_TIMESTAMP
                 RETURNING country_id
                 """,
@@ -312,6 +313,7 @@ def upsert_country(
                     country_info.poverty_rate,
                     country_info.gini_coefficient,
                     country_info.military_spending,
+                    country_info.gdp_per_capita,
                 ),
             )
             result = cursor.fetchone()

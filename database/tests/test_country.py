@@ -57,6 +57,7 @@ class TestSqlScripts:
             "poverty_rate",
             "gini_coefficient",
             "military_spending",
+            "gdp_per_capita",
         ]
 
         for col in required_columns:
@@ -126,3 +127,94 @@ class TestCountryFunctions:
 
         assert result is True
         mock_exists.assert_called_once_with("countries")
+
+    @patch("database.sql.tables.country.execute_sql_file")
+    def test_alter_gdp_per_capita_calls_executor(self, mock_execute: MagicMock) -> None:
+        """Test alter_gdp_per_capita calls execute_sql_file with correct path."""
+        from database.sql.tables.country import alter_gdp_per_capita
+
+        mock_execute.return_value = True
+        result = alter_gdp_per_capita()
+
+        assert result is True
+        mock_execute.assert_called_once()
+        call_path = mock_execute.call_args[0][0]
+        assert call_path.name == "country_alter_gdp_per_capita.sql"
+
+    @patch("database.sql.tables.country.execute_sql_file")
+    def test_rollback_gdp_per_capita_calls_executor(
+        self, mock_execute: MagicMock
+    ) -> None:
+        """Test rollback_gdp_per_capita calls execute_sql_file."""
+        from database.sql.tables.country import rollback_gdp_per_capita
+
+        mock_execute.return_value = True
+        result = rollback_gdp_per_capita()
+
+        assert result is True
+        mock_execute.assert_called_once()
+        call_path = mock_execute.call_args[0][0]
+        assert call_path.name == "country_alter_gdp_per_capita_rollback.sql"
+
+
+class TestGdpPerCapitaMigration:
+    """Tests for gdp_per_capita migration scripts."""
+
+    def test_create_script_has_gdp_per_capita_column(self) -> None:
+        """Test that create script contains gdp_per_capita column."""
+        script = SCRIPT_DIR / "country_create.sql"
+        content = script.read_text()
+
+        assert "gdp_per_capita" in content, "Missing gdp_per_capita column"
+        assert "NUMERIC(10, 2)" in content or "NUMERIC(10,2)" in content
+
+    def test_alter_gdp_per_capita_script_exists(self) -> None:
+        """Test that alter gdp_per_capita script file exists."""
+        script = SCRIPT_DIR / "country_alter_gdp_per_capita.sql"
+        assert script.exists(), f"Script not found: {script}"
+
+    def test_rollback_gdp_per_capita_script_exists(self) -> None:
+        """Test that rollback gdp_per_capita script file exists."""
+        script = SCRIPT_DIR / "country_alter_gdp_per_capita_rollback.sql"
+        assert script.exists(), f"Script not found: {script}"
+
+    def test_alter_gdp_per_capita_script_has_transaction(self) -> None:
+        """Test that alter script uses transactions."""
+        script = SCRIPT_DIR / "country_alter_gdp_per_capita.sql"
+        content = script.read_text()
+
+        assert "BEGIN" in content
+        assert "COMMIT" in content
+
+    def test_alter_gdp_per_capita_script_is_idempotent(self) -> None:
+        """Test that alter script checks for existing column."""
+        script = SCRIPT_DIR / "country_alter_gdp_per_capita.sql"
+        content = script.read_text()
+
+        assert "information_schema.columns" in content
+        assert "gdp_per_capita" in content
+
+    def test_rollback_gdp_per_capita_script_has_transaction(self) -> None:
+        """Test that rollback script uses transactions."""
+        script = SCRIPT_DIR / "country_alter_gdp_per_capita_rollback.sql"
+        content = script.read_text()
+
+        assert "BEGIN" in content
+        assert "COMMIT" in content
+
+    def test_rollback_gdp_per_capita_script_is_idempotent(self) -> None:
+        """Test that rollback script checks for column existence."""
+        script = SCRIPT_DIR / "country_alter_gdp_per_capita_rollback.sql"
+        content = script.read_text()
+
+        assert "information_schema.columns" in content
+        assert "gdp_per_capita" in content
+
+    def test_alter_gdp_per_capita_handles_foreign_keys(self) -> None:
+        """Test that migration script handles cities FK constraint."""
+        script = SCRIPT_DIR / "country_alter_gdp_per_capita.sql"
+        content = script.read_text()
+
+        # Should drop and recreate FK constraint
+        assert "fk_cities_countries" in content
+        assert "DROP CONSTRAINT" in content or "ADD CONSTRAINT" in content

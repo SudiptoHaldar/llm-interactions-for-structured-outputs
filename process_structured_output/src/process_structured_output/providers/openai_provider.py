@@ -14,6 +14,14 @@ from process_structured_output.models.country import (
     CityInfo,
     CountryInfo,
 )
+from process_structured_output.prompts import (
+    CITY_SYSTEM_PROMPT,
+    COUNTRY_SYSTEM_PROMPT,
+    get_cities_user_prompt,
+    get_country_user_prompt,
+    truncate_city_strings,
+    truncate_country_strings,
+)
 
 # Retry configuration
 MAX_RETRIES = 3
@@ -137,42 +145,8 @@ class OpenAIProvider:
         response = self.client.chat.completions.create(
             model=self.model,
             messages=[
-                {
-                    "role": "system",
-                    "content": (
-                        "You are a helpful AI geography teacher knowledgeable on "
-                        "world geography, continents and countries. "
-                        "Always respond with valid JSON."
-                    ),
-                },
-                {
-                    "role": "user",
-                    "content": (
-                        f"Provide information about the country {country_name} "
-                        "as a JSON object with these exact fields:\n"
-                        "- description: string (less than 250 characters)\n"
-                        "- interesting_fact: string (less than 250 characters)\n"
-                        "- area_sq_mile: number (area in square miles)\n"
-                        "- area_sq_km: number (area in square km)\n"
-                        "- population: integer\n"
-                        "- ppp: number (purchasing power parity in $)\n"
-                        "- life_expectancy: number (in years)\n"
-                        "- travel_risk_level: string (US advisory level)\n"
-                        "- global_peace_index_score: number (IEP score)\n"
-                        "- global_peace_index_rank: integer (IEP rank)\n"
-                        "- happiness_index_score: number (Oxford score)\n"
-                        "- happiness_index_rank: integer (Oxford rank)\n"
-                        "- gdp: number (in $)\n"
-                        "- gdp_growth_rate: number (in %)\n"
-                        "- inflation_rate: number (in %)\n"
-                        "- unemployment_rate: number (in %)\n"
-                        "- govt_debt: number (in % of GDP)\n"
-                        "- credit_rating: string (S&P rating)\n"
-                        "- poverty_rate: number (in %)\n"
-                        "- gini_coefficient: number (income inequality)\n"
-                        "- military_spending: number (in % of GDP)"
-                    ),
-                },
+                {"role": "system", "content": COUNTRY_SYSTEM_PROMPT},
+                {"role": "user", "content": get_country_user_prompt(country_name)},
             ],
             response_format={"type": "json_object"},
         )
@@ -182,6 +156,8 @@ class OpenAIProvider:
             data = json.loads(content)
             if not data:
                 raise ValueError("Empty JSON response from OpenAI")
+            # Truncate strings to enforce character limits
+            data = truncate_country_strings(data)
             return CountryInfo(**data)
         except json.JSONDecodeError as e:
             raise ValueError(f"Failed to parse country info: {e}") from e
@@ -209,34 +185,8 @@ class OpenAIProvider:
         response = self.client.chat.completions.create(
             model=self.model,
             messages=[
-                {
-                    "role": "system",
-                    "content": (
-                        "You are a helpful AI geography teacher knowledgeable on "
-                        "world geography, continents, countries, and cities. "
-                        "Always respond with valid JSON."
-                    ),
-                },
-                {
-                    "role": "user",
-                    "content": (
-                        f"List up to 5 most populous cities in {country_name}. "
-                        "Return a JSON object with a 'cities' array. "
-                        "Each city should have these fields:\n"
-                        "- name: string\n"
-                        "- is_capital: boolean\n"
-                        "- description: string (less than 250 characters)\n"
-                        "- interesting_fact: string (less than 250 characters)\n"
-                        "- area_sq_mile: number\n"
-                        "- area_sq_km: number\n"
-                        "- population: integer\n"
-                        "- sci_score: number or null (EIU Safe Cities Index)\n"
-                        "- sci_rank: integer or null (EIU Safe Cities Index rank)\n"
-                        "- numbeo_si: number or null (Numbeo Safety Index 0-100)\n"
-                        "- numbeo_ci: number or null (Numbeo Crime Index 0-100)\n"
-                        "- airport_code: string (3-letter IATA code)"
-                    ),
-                },
+                {"role": "system", "content": CITY_SYSTEM_PROMPT},
+                {"role": "user", "content": get_cities_user_prompt(country_name)},
             ],
             response_format={"type": "json_object"},
         )
@@ -244,9 +194,12 @@ class OpenAIProvider:
         content = response.choices[0].message.content or "{}"
         try:
             data = json.loads(content)
-            # Sanitize each city before validation
+            # Sanitize and truncate each city before validation
             if "cities" in data:
-                data["cities"] = [_sanitize_city_data(c) for c in data["cities"]]
+                data["cities"] = [
+                    truncate_city_strings(_sanitize_city_data(c))
+                    for c in data["cities"]
+                ]
             cities_response = CitiesResponse(**data)
             return cities_response.cities
         except (json.JSONDecodeError, ValidationError) as e:

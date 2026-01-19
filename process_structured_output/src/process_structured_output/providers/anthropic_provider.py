@@ -2,7 +2,6 @@
 
 import os
 import time
-from typing import Any
 
 from anthropic import Anthropic
 from dotenv import load_dotenv
@@ -10,216 +9,17 @@ from pydantic import ValidationError
 
 from process_structured_output.models.continent import ModelIdentity
 from process_structured_output.models.country import CityInfo, CountryInfo
+from process_structured_output.prompts import (
+    COUNTRY_SYSTEM_PROMPT,
+    get_cities_tool_schema,
+    get_country_tool_schema,
+    truncate_city_strings,
+    truncate_country_strings,
+)
 
 # Maximum retries for transient LLM failures
 MAX_RETRIES = 3
 RETRY_DELAY = 1.0  # seconds
-
-
-def _build_country_tool() -> dict[str, Any]:
-    """Build the tool definition for country info extraction."""
-    return {
-        "name": "record_country_info",
-        "description": "Records structured information about a country",
-        "input_schema": {
-            "type": "object",
-            "properties": {
-                "description": {
-                    "type": "string",
-                    "description": "Brief description (max 250 chars)",
-                },
-                "interesting_fact": {
-                    "type": "string",
-                    "description": "Notable fact (max 250 chars)",
-                },
-                "area_sq_mile": {
-                    "type": "number",
-                    "description": "Area in square miles",
-                },
-                "area_sq_km": {
-                    "type": "number",
-                    "description": "Area in square kilometers",
-                },
-                "population": {
-                    "type": "integer",
-                    "description": "Total population",
-                },
-                "ppp": {
-                    "type": "number",
-                    "description": "Purchasing power parity in USD",
-                },
-                "life_expectancy": {
-                    "type": "number",
-                    "description": "Life expectancy in years",
-                },
-                "travel_risk_level": {
-                    "type": "string",
-                    "description": (
-                        "US State Dept advisory in format 'Level X: Description' "
-                        "where X is 1-4 (e.g., 'Level 3: Reconsider Travel')"
-                    ),
-                },
-                "global_peace_index_score": {
-                    "type": "number",
-                    "description": "GPI score (IEP)",
-                },
-                "global_peace_index_rank": {
-                    "type": "integer",
-                    "description": "GPI rank",
-                },
-                "happiness_index_score": {
-                    "type": "number",
-                    "description": "World Happiness score",
-                },
-                "happiness_index_rank": {
-                    "type": "integer",
-                    "description": "World Happiness rank",
-                },
-                "gdp": {
-                    "type": "number",
-                    "description": "GDP in USD",
-                },
-                "gdp_growth_rate": {
-                    "type": "number",
-                    "description": "GDP growth rate %",
-                },
-                "inflation_rate": {
-                    "type": "number",
-                    "description": "Inflation rate %",
-                },
-                "unemployment_rate": {
-                    "type": "number",
-                    "description": "Unemployment rate %",
-                },
-                "govt_debt": {
-                    "type": "number",
-                    "description": "Government debt as % of GDP",
-                },
-                "credit_rating": {
-                    "type": "string",
-                    "description": "S&P credit rating",
-                },
-                "poverty_rate": {
-                    "type": "number",
-                    "description": "Poverty rate %",
-                },
-                "gini_coefficient": {
-                    "type": "number",
-                    "description": "Gini coefficient (0-100)",
-                },
-                "military_spending": {
-                    "type": "number",
-                    "description": "Military spending as % of GDP",
-                },
-            },
-            "required": [
-                "description",
-                "interesting_fact",
-                "area_sq_mile",
-                "area_sq_km",
-                "population",
-                "ppp",
-                "life_expectancy",
-                "travel_risk_level",
-                "global_peace_index_score",
-                "global_peace_index_rank",
-                "happiness_index_score",
-                "happiness_index_rank",
-                "gdp",
-                "gdp_growth_rate",
-                "inflation_rate",
-                "unemployment_rate",
-                "govt_debt",
-                "credit_rating",
-                "poverty_rate",
-                "gini_coefficient",
-                "military_spending",
-            ],
-        },
-    }
-
-
-def _build_cities_tool() -> dict[str, Any]:
-    """Build the tool definition for cities info extraction."""
-    city_schema = {
-        "type": "object",
-        "properties": {
-            "name": {
-                "type": "string",
-                "description": "City name",
-            },
-            "is_capital": {
-                "type": "boolean",
-                "description": "Whether this is the capital city",
-            },
-            "description": {
-                "type": "string",
-                "description": "Brief description (max 250 chars)",
-            },
-            "interesting_fact": {
-                "type": "string",
-                "description": "Notable fact (max 250 chars)",
-            },
-            "area_sq_mile": {
-                "type": "number",
-                "description": "Area in square miles",
-            },
-            "area_sq_km": {
-                "type": "number",
-                "description": "Area in square kilometers",
-            },
-            "population": {
-                "type": "integer",
-                "description": "Total population",
-            },
-            "sci_score": {
-                "type": ["number", "null"],
-                "description": "EIU Safe Cities Index score (0-100)",
-            },
-            "sci_rank": {
-                "type": ["integer", "null"],
-                "description": "EIU Safe Cities Index rank",
-            },
-            "numbeo_si": {
-                "type": ["number", "null"],
-                "description": "Numbeo Safety Index (0-100)",
-            },
-            "numbeo_ci": {
-                "type": ["number", "null"],
-                "description": "Numbeo Crime Index (0-100)",
-            },
-            "airport_code": {
-                "type": "string",
-                "description": "3-letter IATA airport code",
-            },
-        },
-        "required": [
-            "name",
-            "is_capital",
-            "description",
-            "interesting_fact",
-            "area_sq_mile",
-            "area_sq_km",
-            "population",
-            "airport_code",
-        ],
-    }
-
-    return {
-        "name": "record_cities_info",
-        "description": "Records structured information about cities in a country",
-        "input_schema": {
-            "type": "object",
-            "properties": {
-                "cities": {
-                    "type": "array",
-                    "items": city_schema,
-                    "description": "List of up to 5 most populous cities",
-                },
-            },
-            "required": ["cities"],
-        },
-    }
 
 
 class AnthropicProvider:
@@ -273,15 +73,14 @@ class AnthropicProvider:
         response = self.client.messages.create(  # type: ignore[call-overload]
             model=self.model,
             max_tokens=1500,
-            tools=[_build_country_tool()],
+            tools=[get_country_tool_schema()],
             tool_choice={"type": "tool", "name": "record_country_info"},
             messages=[
                 {
                     "role": "user",
                     "content": (
-                        f"You are a helpful AI geography teacher knowledgeable on "
-                        f"world geography, continents and countries. Please provide "
-                        f"comprehensive information about {country_name} using the "
+                        f"{COUNTRY_SYSTEM_PROMPT} Please provide comprehensive "
+                        f"information about {country_name} using the "
                         f"record_country_info tool. Include accurate geographic, "
                         f"economic, and social data."
                     ),
@@ -295,7 +94,9 @@ class AnthropicProvider:
             is_country_tool = content_block.name == "record_country_info"
             if is_tool_use and is_country_tool:
                 try:
-                    return CountryInfo(**content_block.input)
+                    # Truncate strings to enforce character limits
+                    data = truncate_country_strings(content_block.input)
+                    return CountryInfo(**data)
                 except ValidationError as e:
                     raise ValueError(f"Failed to validate country info: {e}") from e
 
@@ -327,7 +128,7 @@ class AnthropicProvider:
         response = self.client.messages.create(  # type: ignore[call-overload]
             model=self.model,
             max_tokens=3000,
-            tools=[_build_cities_tool()],
+            tools=[get_cities_tool_schema()],
             tool_choice={"type": "tool", "name": "record_cities_info"},
             messages=[
                 {
@@ -349,6 +150,8 @@ class AnthropicProvider:
             if is_tool_use and is_cities_tool:
                 try:
                     cities_data = content_block.input.get("cities", [])
+                    # Truncate strings to enforce character limits
+                    cities_data = [truncate_city_strings(c) for c in cities_data]
                     return [CityInfo(**city) for city in cities_data]
                 except ValidationError as e:
                     raise ValueError(f"Failed to validate cities info: {e}") from e

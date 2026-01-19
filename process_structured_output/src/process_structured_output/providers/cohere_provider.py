@@ -4,7 +4,6 @@ import json
 import os
 import re
 import time
-from typing import Any
 
 import cohere
 from dotenv import load_dotenv
@@ -12,6 +11,13 @@ from pydantic import ValidationError
 
 from process_structured_output.models.continent import ModelIdentity
 from process_structured_output.models.country import CityInfo, CountryInfo
+from process_structured_output.prompts import (
+    COUNTRY_SYSTEM_PROMPT,
+    get_cities_json_schema,
+    get_country_json_schema,
+    truncate_city_strings,
+    truncate_country_strings,
+)
 
 
 def _sanitize_json(content: str) -> str:
@@ -88,101 +94,6 @@ RETRY_DELAY = 1.0  # seconds
 RATE_LIMIT_DELAY = 10.0  # seconds - longer delay for 429 errors
 
 
-def _build_country_schema() -> dict[str, Any]:
-    """Build the JSON schema for country info extraction."""
-    return {
-        "type": "object",
-        "required": [
-            "description",
-            "interesting_fact",
-            "area_sq_mile",
-            "area_sq_km",
-            "population",
-            "ppp",
-            "life_expectancy",
-            "travel_risk_level",
-            "global_peace_index_score",
-            "global_peace_index_rank",
-            "happiness_index_score",
-            "happiness_index_rank",
-            "gdp",
-            "gdp_growth_rate",
-            "inflation_rate",
-            "unemployment_rate",
-            "govt_debt",
-            "credit_rating",
-            "poverty_rate",
-            "gini_coefficient",
-            "military_spending",
-        ],
-        "properties": {
-            "description": {"type": "string"},
-            "interesting_fact": {"type": "string"},
-            "area_sq_mile": {"type": "number"},
-            "area_sq_km": {"type": "number"},
-            "population": {"type": "integer"},
-            "ppp": {"type": "number"},
-            "life_expectancy": {"type": "number"},
-            "travel_risk_level": {"type": "string"},
-            "global_peace_index_score": {"type": "number"},
-            "global_peace_index_rank": {"type": "integer"},
-            "happiness_index_score": {"type": "number"},
-            "happiness_index_rank": {"type": "integer"},
-            "gdp": {"type": "number"},
-            "gdp_growth_rate": {"type": "number"},
-            "inflation_rate": {"type": "number"},
-            "unemployment_rate": {"type": "number"},
-            "govt_debt": {"type": "number"},
-            "credit_rating": {"type": "string"},
-            "poverty_rate": {"type": "number"},
-            "gini_coefficient": {"type": "number"},
-            "military_spending": {"type": "number"},
-        },
-    }
-
-
-def _build_cities_schema() -> dict[str, Any]:
-    """Build the JSON schema for cities info extraction."""
-    city_schema = {
-        "type": "object",
-        "required": [
-            "name",
-            "is_capital",
-            "description",
-            "interesting_fact",
-            "area_sq_mile",
-            "area_sq_km",
-            "population",
-            "airport_code",
-        ],
-        "properties": {
-            "name": {"type": "string"},
-            "is_capital": {"type": "boolean"},
-            "description": {"type": "string"},
-            "interesting_fact": {"type": "string"},
-            "area_sq_mile": {"type": "number"},
-            "area_sq_km": {"type": "number"},
-            "population": {"type": "integer"},
-            "sci_score": {"type": ["number", "null"]},
-            "sci_rank": {"type": ["integer", "null"]},
-            "numbeo_si": {"type": ["number", "null"]},
-            "numbeo_ci": {"type": ["number", "null"]},
-            "airport_code": {"type": "string"},
-        },
-    }
-
-    return {
-        "type": "object",
-        "required": ["cities"],
-        "properties": {
-            "cities": {
-                "type": "array",
-                "items": city_schema,
-            },
-        },
-    }
-
-
 class CohereProvider:
     """Cohere Command API provider for structured country information."""
 
@@ -229,8 +140,7 @@ class CohereProvider:
             {
                 "role": "user",
                 "content": (
-                    f"You are a helpful AI geography teacher knowledgeable on "
-                    f"world geography, continents and countries. Generate a JSON "
+                    f"{COUNTRY_SYSTEM_PROMPT} Generate a JSON "
                     f"with comprehensive information about {country_name}. "
                     f"Include accurate geographic, economic, and social data. "
                     f"All text fields should be under 250 characters."
@@ -239,7 +149,8 @@ class CohereProvider:
         ]
         response_format = {
             "type": "json_object",
-            "schema": _build_country_schema(),
+            # Cohere doesn't support maxLength constraint
+            "schema": get_country_json_schema(include_max_length=False),
         }
         response = self.client.chat(
             model=self.model,
@@ -257,6 +168,8 @@ class CohereProvider:
             extracted = _try_extract_json(content)
             sanitized = _sanitize_json(extracted)
             data = json.loads(sanitized)
+            # Truncate strings to enforce character limits
+            data = truncate_country_strings(data)
             return CountryInfo(**data)
         except (json.JSONDecodeError, ValidationError) as e:
             print(f"\n[DEBUG] Raw JSON response:\n{content[:1000]}")
@@ -309,7 +222,8 @@ class CohereProvider:
         ]
         response_format = {
             "type": "json_object",
-            "schema": _build_cities_schema(),
+            # Cohere doesn't support maxLength constraint
+            "schema": get_cities_json_schema(include_max_length=False),
         }
         response = self.client.chat(
             model=self.model,
@@ -335,7 +249,8 @@ class CohereProvider:
             else:
                 raise ValueError(f"Unexpected cities format: {type(data)}")
 
-            return [CityInfo(**city) for city in cities_data]
+            # Truncate strings to enforce character limits
+            return [CityInfo(**truncate_city_strings(city)) for city in cities_data]
         except (json.JSONDecodeError, ValidationError) as e:
             raise ValueError(f"Failed to parse cities info: {e}") from e
 

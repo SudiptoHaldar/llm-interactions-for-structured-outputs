@@ -76,6 +76,7 @@ class TestAnthropicProvider:
             "poverty_rate": 40.0,
             "gini_coefficient": 35.0,
             "military_spending": 0.6,
+            "gdp_per_capita": 2045.0,
         }
         mock_response.content = [mock_tool_use]
 

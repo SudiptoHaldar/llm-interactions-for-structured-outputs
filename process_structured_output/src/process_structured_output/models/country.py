@@ -116,6 +116,11 @@ class CountryInfo(BaseModel):
         description="Military spending as percentage of GDP",
         ge=0,
     )
+    gdp_per_capita: float = Field(
+        ...,
+        description="GDP per capita in USD",
+        ge=0,
+    )
 
 
 class CityInfo(BaseModel):

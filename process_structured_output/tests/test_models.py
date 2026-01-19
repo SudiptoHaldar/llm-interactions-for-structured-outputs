@@ -116,10 +116,12 @@ class TestCountryInfo:
             poverty_rate=40.0,
             gini_coefficient=35.0,
             military_spending=0.6,
+            gdp_per_capita=2045.0,
         )
         assert info.description == "West African nation"
         assert info.population == 220000000
         assert info.gdp == 450000000000.0
+        assert info.gdp_per_capita == 2045.0
 
     def test_country_info_positive_values(self) -> None:
         """Test CountryInfo requires positive values for area."""
@@ -146,6 +148,7 @@ class TestCountryInfo:
                 poverty_rate=1.0,
                 gini_coefficient=30.0,
                 military_spending=1.0,
+                gdp_per_capita=1000.0,
             )
 
     def test_country_info_description_max_length(self) -> None:
@@ -173,6 +176,7 @@ class TestCountryInfo:
                 poverty_rate=1.0,
                 gini_coefficient=30.0,
                 military_spending=1.0,
+                gdp_per_capita=1000.0,
             )
 
 

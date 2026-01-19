@@ -75,7 +75,7 @@ class TestAI21Provider:
                         '"credit_rating": "B-", '
                         '"poverty_rate": 40.0, '
                         '"gini_coefficient": 35.0, '
-                        '"military_spending": 0.6}'
+                        '"military_spending": 0.6, "gdp_per_capita": 2045.0}'
                     )
                 )
             )

@@ -1,9 +1,11 @@
 -- ============================================================================
 -- Table: countries
 -- Description: Country information with economic and quality-of-life indicators
--- Version: 1.2.0
+-- Version: 1.4.0
 -- Created: 2026-01-03
 -- Updated: 2026-01-04 - Increased ppp precision to NUMERIC(18,2) for large economies
+-- Updated: 2026-01-17 - Added gdp_per_capita column
+-- Updated: 2026-01-18 - Increased precision of percentage fields to NUMERIC(8,2)
 -- Prerequisites: ai_models and continents tables must be created first
 -- ============================================================================
 
@@ -28,29 +30,30 @@ CREATE TABLE IF NOT EXISTS countries (
     -- Demographic data
     population      BIGINT,
     ppp             NUMERIC(18, 2),
-    life_expectancy NUMERIC(5, 2),
+    life_expectancy NUMERIC(8, 2),
 
     -- Safety/Risk indicators
     travel_risk_level VARCHAR(50),
 
     -- Peace index (Institute for Economics & Peace)
-    global_peace_index_score NUMERIC(5, 3),
+    global_peace_index_score NUMERIC(8, 3),
     global_peace_index_rank  INTEGER,
 
     -- Happiness index (Oxford Wellbeing Research Centre)
-    happiness_index_score NUMERIC(5, 3),
+    happiness_index_score NUMERIC(8, 3),
     happiness_index_rank  INTEGER,
 
     -- Economic indicators
     gdp                 NUMERIC(18, 2),
-    gdp_growth_rate     NUMERIC(6, 2),
-    inflation_rate      NUMERIC(6, 2),
-    unemployment_rate   NUMERIC(5, 2),
-    govt_debt           NUMERIC(6, 2),
+    gdp_growth_rate     NUMERIC(8, 2),
+    inflation_rate      NUMERIC(8, 2),
+    unemployment_rate   NUMERIC(8, 2),
+    govt_debt           NUMERIC(8, 2),
     credit_rating       VARCHAR(10),
-    poverty_rate        NUMERIC(5, 2),
-    gini_coefficient    NUMERIC(5, 2),
-    military_spending   NUMERIC(5, 2),
+    poverty_rate        NUMERIC(8, 2),
+    gini_coefficient    NUMERIC(8, 2),
+    military_spending   NUMERIC(8, 2),
+    gdp_per_capita      NUMERIC(12, 2),
 
     -- Audit timestamps
     created_at      TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
@@ -104,5 +107,6 @@ COMMENT ON COLUMN countries.credit_rating IS 'S&P credit rating';
 COMMENT ON COLUMN countries.poverty_rate IS 'Poverty rate percentage';
 COMMENT ON COLUMN countries.gini_coefficient IS 'Gini coefficient (income inequality measure)';
 COMMENT ON COLUMN countries.military_spending IS 'Military spending as percentage of GDP';
+COMMENT ON COLUMN countries.gdp_per_capita IS 'Gross Domestic Product per capita in USD';
 COMMENT ON COLUMN countries.created_at IS 'Record creation timestamp';
 COMMENT ON COLUMN countries.updated_at IS 'Last update timestamp';

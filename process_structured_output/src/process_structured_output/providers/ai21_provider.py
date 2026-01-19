@@ -12,6 +12,14 @@ from pydantic import ValidationError
 
 from process_structured_output.models.continent import ModelIdentity
 from process_structured_output.models.country import CityInfo, CountryInfo
+from process_structured_output.prompts import (
+    CITY_SYSTEM_PROMPT,
+    COUNTRY_SYSTEM_PROMPT,
+    get_cities_user_prompt,
+    get_country_user_prompt,
+    truncate_city_strings,
+    truncate_country_strings,
+)
 
 
 def _sanitize_json(content: str) -> str:
@@ -149,44 +157,8 @@ class AI21Provider:
         """
         response = self.client.chat.completions.create(
             messages=[
-                ChatMessage(
-                    role="system",
-                    content=(
-                        "You are a helpful AI geography teacher knowledgeable on "
-                        "world geography, continents and countries. Respond with "
-                        "accurate geographic and economic data in JSON format."
-                    ),
-                ),
-                ChatMessage(
-                    role="user",
-                    content=(
-                        f"Please provide information on the country {country_name} "
-                        "in JSON format with these fields:\n"
-                        "- description: less than 250 characters\n"
-                        "- interesting_fact: less than 250 characters\n"
-                        "- area_sq_mile: area in square miles (number)\n"
-                        "- area_sq_km: area in square km (number)\n"
-                        "- population: total population (integer)\n"
-                        "- ppp: purchasing power parity in USD (number)\n"
-                        "- life_expectancy: in years (number)\n"
-                        "- travel_risk_level: US State Dept advisory in format "
-                        "'Level X: Description' where X is 1-4 "
-                        "(e.g., 'Level 3: Reconsider Travel')\n"
-                        "- global_peace_index_score: IEP score (number)\n"
-                        "- global_peace_index_rank: IEP rank (integer)\n"
-                        "- happiness_index_score: Oxford score (number)\n"
-                        "- happiness_index_rank: Oxford rank (integer)\n"
-                        "- gdp: in USD (number)\n"
-                        "- gdp_growth_rate: percentage (number)\n"
-                        "- inflation_rate: percentage (number)\n"
-                        "- unemployment_rate: percentage (number)\n"
-                        "- govt_debt: as percentage of GDP (number)\n"
-                        "- credit_rating: S&P rating (string)\n"
-                        "- poverty_rate: percentage (number)\n"
-                        "- gini_coefficient: inequality measure (number)\n"
-                        "- military_spending: as percentage of GDP (number)"
-                    ),
-                ),
+                ChatMessage(role="system", content=COUNTRY_SYSTEM_PROMPT),
+                ChatMessage(role="user", content=get_country_user_prompt(country_name)),
             ],
             model=self.model,
             response_format={"type": "json_object"},
@@ -199,6 +171,8 @@ class AI21Provider:
             extracted = _try_extract_json(content)
             sanitized = _sanitize_json(extracted)
             data = json.loads(sanitized)
+            # Truncate strings to enforce character limits
+            data = truncate_country_strings(data)
             return CountryInfo(**data)
         except (json.JSONDecodeError, ValidationError) as e:
             # Show raw content for debugging
@@ -248,34 +222,8 @@ class AI21Provider:
         """
         response = self.client.chat.completions.create(
             messages=[
-                ChatMessage(
-                    role="system",
-                    content=(
-                        "You are a helpful AI geography teacher knowledgeable on "
-                        "world geography, continents, countries, and cities. "
-                        "Respond with accurate data in JSON format."
-                    ),
-                ),
-                ChatMessage(
-                    role="user",
-                    content=(
-                        f"Please list up to 5 most populous cities in {country_name} "
-                        "and return information in JSON format with a 'cities' array. "
-                        "Each city should have:\n"
-                        "- name: city name (string)\n"
-                        "- is_capital: whether capital city (boolean)\n"
-                        "- description: less than 250 characters\n"
-                        "- interesting_fact: less than 250 characters\n"
-                        "- area_sq_mile: area in square miles (number)\n"
-                        "- area_sq_km: area in square km (number)\n"
-                        "- population: total population (integer)\n"
-                        "- sci_score: EIU Safe Cities Index 0-100 or null\n"
-                        "- sci_rank: EIU rank or null\n"
-                        "- numbeo_si: Numbeo Safety Index 0-100 or null\n"
-                        "- numbeo_ci: Numbeo Crime Index 0-100 or null\n"
-                        "- airport_code: 3-letter IATA code for nearest airport"
-                    ),
-                ),
+                ChatMessage(role="system", content=CITY_SYSTEM_PROMPT),
+                ChatMessage(role="user", content=get_cities_user_prompt(country_name)),
             ],
             model=self.model,
             response_format={"type": "json_object"},
@@ -296,7 +244,8 @@ class AI21Provider:
             else:
                 raise ValueError(f"Unexpected cities format: {type(data)}")
 
-            return [CityInfo(**city) for city in cities_data]
+            # Truncate strings to enforce character limits
+            return [CityInfo(**truncate_city_strings(city)) for city in cities_data]
         except (json.JSONDecodeError, ValidationError) as e:
             raise ValueError(f"Failed to parse cities info: {e}") from e
 

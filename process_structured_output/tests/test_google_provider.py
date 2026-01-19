@@ -118,7 +118,8 @@ class TestGetCountryInfo:
             "credit_rating": "AA",
             "poverty_rate": 10.0,
             "gini_coefficient": 35.0,
-            "military_spending": 2.0
+            "military_spending": 2.0,
+            "gdp_per_capita": 10000.0
         })
 
         with patch(
@@ -229,7 +230,8 @@ class TestRetryLogic:
             "happiness_index_score": 6.5, "happiness_index_rank": 1,
             "gdp": 1000, "gdp_growth_rate": 3.5, "inflation_rate": 2.0,
             "unemployment_rate": 5.0, "govt_debt": 60.0, "credit_rating": "AA",
-            "poverty_rate": 10.0, "gini_coefficient": 35.0, "military_spending": 2.0
+            "poverty_rate": 10.0, "gini_coefficient": 35.0, "military_spending": 2.0,
+            "gdp_per_capita": 1000.0
         })
 
         with patch(

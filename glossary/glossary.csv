@@ -1,0 +1,13 @@
+﻿Entry,Meaning,Range,Interpretation
+GDP (PPP),Gross Domestic Product (PPP) is an economic metric used to compare the productivity and standards of living between countries by adjusting for the differences in the cost of living and inflation rates,Numeric,Higher is better
+GDP Per Capita,An economic metric that breaks down a country's total economic output (Gross Domestic Product) per person,Numeric,Higher is better
+Gini Coefficient,"The Gini Coefficient is the most widely used statistical measure of inequality. It is primarily used to represent the income or wealth distribution of a nation's residents, but it can also be applied to other distributions like health outcomes or education.",0 - 100,Lower is better
+GPI (Global Peace Index),"Published annually by the Institute for Economics & Peace (IEP). It scores 163 independent states and territories based on 23 indicators. Lower score means higher stability, lower crime and military conflict.",1 - 5,Lower is better
+Happiness Index,Quality of life rated by the residents.,0 - 10,Higher is better
+Nominal GDP,"Measures Market Power (how much a country can buy on the international market, like oil or weapons)",Numeric,Higher is better
+Numbeo Crime Index,The Crime Index is an estimate of the overall level of crime in a given location.,0 - 100,Lower is better
+Numbeo Safety Index,A high safety score indicates that a city is considered very safe by those who live in or visit it. It specifically measures how safe people feel walking alone during the day and at night.,0 - 100,Higher is better
+Poverty Rate,"The poverty rate is a statistical ratio used to measure the proportion of a population whose income or consumption falls below a specific threshold, known as the poverty line.1Mathematically, it is expressed as:$$\text{Poverty Rate} = \left( \frac{\text{Number of People Below the Poverty Line}}{\text{Total Population}} \right) \times 100$$",0 - 100,Lower is better
+PPP (Purchasing Power Parity),"This is a metric used by economists to compare the standard of living between countries by ""evening out"" the cost of goods.",Numeric,Lower is better
+SCI Score,"The SCI score and rank refer to results from the Safe Cities Index (SCI), a global city-level safety benchmark published by the Economist Intelligence Unit (EIU).",0 - 100,Higher is better
+Travel Risk Level,Travel risk levels are dynamic assessments used by governments and international organizations to help you understand the safety of a destination.,Level 1 - Level 4,Lower is better

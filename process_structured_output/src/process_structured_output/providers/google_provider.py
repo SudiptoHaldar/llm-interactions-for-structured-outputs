@@ -14,6 +14,12 @@ from process_structured_output.models.country import (
     CityInfo,
     CountryInfo,
 )
+from process_structured_output.prompts import (
+    get_cities_user_prompt,
+    get_country_user_prompt,
+    truncate_city_strings,
+    truncate_country_strings,
+)
 
 # Retry configuration
 MAX_RETRIES = 3
@@ -150,35 +156,7 @@ class GoogleProvider:
         """
         response = self.client.models.generate_content(
             model=self.model,
-            contents=(
-                f"You are a helpful AI geography teacher knowledgeable on "
-                f"world geography, continents and countries. "
-                f"Please provide information on the country {country_name} "
-                "in JSON format with these fields:\n"
-                "- description: less than 250 characters\n"
-                "- interesting_fact: less than 250 characters\n"
-                "- area_sq_mile: area in square miles (number)\n"
-                "- area_sq_km: area in square km (number)\n"
-                "- population: total population (integer)\n"
-                "- ppp: purchasing power parity in USD (number)\n"
-                "- life_expectancy: in years (number)\n"
-                "- travel_risk_level: US State Dept advisory in format "
-                "'Level X: Description' where X is 1-4 "
-                "(e.g., 'Level 2: Exercise Increased Caution')\n"
-                "- global_peace_index_score: IEP score (number)\n"
-                "- global_peace_index_rank: IEP rank (integer)\n"
-                "- happiness_index_score: Oxford score (number)\n"
-                "- happiness_index_rank: Oxford rank (integer)\n"
-                "- gdp: in USD (number)\n"
-                "- gdp_growth_rate: percentage (number)\n"
-                "- inflation_rate: percentage (number)\n"
-                "- unemployment_rate: percentage (number)\n"
-                "- govt_debt: as percentage of GDP (number)\n"
-                "- credit_rating: S&P rating (string)\n"
-                "- poverty_rate: percentage (number)\n"
-                "- gini_coefficient: inequality measure (number)\n"
-                "- military_spending: as percentage of GDP (number)"
-            ),
+            contents=get_country_user_prompt(country_name),
             config=types.GenerateContentConfig(
                 response_mime_type="application/json",
                 max_output_tokens=2000,
@@ -189,7 +167,8 @@ class GoogleProvider:
 
         try:
             data = json.loads(content)
-            data = _sanitize_city_data(data)
+            # Truncate strings to enforce character limits
+            data = truncate_country_strings(data)
             return CountryInfo(**data)
         except (json.JSONDecodeError, ValidationError) as e:
             print(f"\n[DEBUG] Raw JSON response:\n{content[:500]}...")
@@ -237,25 +216,7 @@ class GoogleProvider:
         """
         response = self.client.models.generate_content(
             model=self.model,
-            contents=(
-                f"You are a helpful AI geography teacher knowledgeable on "
-                f"world geography, continents, countries, and cities. "
-                f"Please list up to 5 most populous cities in {country_name} "
-                "and return a JSON object with a 'cities' array. "
-                "Each city should have these fields:\n"
-                "- name: city name (string)\n"
-                "- is_capital: whether capital city (boolean)\n"
-                "- description: less than 250 characters\n"
-                "- interesting_fact: less than 250 characters\n"
-                "- area_sq_mile: area in square miles (number)\n"
-                "- area_sq_km: area in square km (number)\n"
-                "- population: total population (integer)\n"
-                "- sci_score: EIU Safe Cities Index 0-100 or null\n"
-                "- sci_rank: EIU rank or null\n"
-                "- numbeo_si: Numbeo Safety Index 0-100 or null\n"
-                "- numbeo_ci: Numbeo Crime Index 0-100 or null\n"
-                "- airport_code: 3-letter IATA code for nearest airport"
-            ),
+            contents=get_cities_user_prompt(country_name),
             config=types.GenerateContentConfig(
                 response_mime_type="application/json",
                 max_output_tokens=4000,
@@ -273,7 +234,11 @@ class GoogleProvider:
                 cities_data = data["cities"]
             else:
                 raise ValueError(f"Unexpected cities format: {type(data)}")
-            return [CityInfo(**_sanitize_city_data(city)) for city in cities_data]
+            # Apply truncation and sanitization
+            return [
+                CityInfo(**truncate_city_strings(_sanitize_city_data(city)))
+                for city in cities_data
+            ]
         except (json.JSONDecodeError, ValidationError) as e:
             print(f"\n[DEBUG] Raw cities JSON response:\n{content[:800]}...")
             raise ValueError(f"Failed to parse cities info: {e}") from e
