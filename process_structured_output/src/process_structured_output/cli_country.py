@@ -189,7 +189,7 @@ Examples:
   country-info Nigeria
   country-info "South Africa" --skip-cities
   country-info Brazil --provider anthropic
-  country-info Japan --provider ai21
+  country-info China --provider ai21
   country-info Germany --provider cohere
   country-info Poland --provider deepseek
   country-info Kenya --provider google
