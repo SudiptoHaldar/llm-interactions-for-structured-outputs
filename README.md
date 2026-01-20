@@ -7,7 +7,7 @@ Programmatically process structured outputs from 8 LLM providers and display cou
 1. AI21 (Jamba)
 2. Anthropic (Claude)
 3. Cohere (Command R+)
-4. DeepSeek (V3)
+4. DeepSeek (Chat)
 5. Google (Gemini)
 6. Groq (Llama)
 7. Mistral (Large)

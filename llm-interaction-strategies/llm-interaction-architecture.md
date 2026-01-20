@@ -67,7 +67,7 @@ flowchart TB
     classDef processing fill:#FF9800,stroke:#E65100,color:#fff,stroke-width:2px
     classDef llm fill:#9C27B0,stroke:#7B1FA2,color:#fff,stroke-width:2px
     classDef data fill:#336791,stroke:#1565C0,color:#fff,stroke-width:2px
-    classDef database fill:#336791,stroke:#1565C0,color:#fff,stroke-width:3px
+    classDef database fill:#336791,stroke:#FFD54F,color:#fff,stroke-width:3px
 ```
 
 ---
@@ -419,7 +419,7 @@ def get_country_user_prompt(country_name: str) -> str:
 
 ```bash
 # Get country info from OpenAI
-uv run country-info --provider openai --country "Japan"
+uv run country-info --provider openai --country "Finland"
 
 # Batch process countries with Anthropic
 uv run all-countries-anthropic
@@ -483,7 +483,7 @@ flowchart TB
     classDef llm fill:#9C27B0,stroke:#7B1FA2,color:#fff,stroke-width:2px
     classDef validation fill:#2196F3,stroke:#1565C0,color:#fff,stroke-width:2px
     classDef success fill:#4CAF50,stroke:#2E7D32,color:#fff,stroke-width:2px
-    classDef database fill:#336791,stroke:#1565C0,color:#fff,stroke-width:3px
+    classDef database fill:#336791,stroke:#FFD54F,color:#fff,stroke-width:3px
     classDef api fill:#009688,stroke:#00796B,color:#fff,stroke-width:2px
     classDef ui fill:#1A237E,stroke:#0D47A1,color:#fff,stroke-width:2px
     classDef ui_secondary fill:#0D47A1,stroke:#1A237E,color:#fff,stroke-width:2px
