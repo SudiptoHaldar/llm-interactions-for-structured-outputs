@@ -1479,6 +1479,34 @@ flutter_app/assets/images/
 
 ### 8.8 Troubleshooting
 
+**Symptom**: Android emulator is unresponsive or freezes
+
+**Cause**: GPU driver compatibility issues with the Android emulator's graphics pipeline.
+
+**Solutions**:
+1. Kill the emulator and restart with software rendering:
+   ```bash
+   # Kill existing emulator processes
+   taskkill /F /IM qemu-system-x86_64.exe
+   taskkill /F /IM emulator.exe
+
+   # Launch with software rendering (SwiftShader)
+   %LOCALAPPDATA%\Android\Sdk\emulator\emulator.exe -avd <AVD_NAME> -no-snapshot -gpu swiftshader_indirect
+   ```
+
+2. The `-gpu swiftshader_indirect` flag uses SwiftShader (Google's CPU-based renderer) instead of your GPU. This is slower but more stable.
+
+3. For persistent fix, set graphics mode in Android Studio:
+   - Open AVD Manager → Edit AVD → Show Advanced Settings
+   - Set "Graphics" to "Software - GLES 2.0"
+
+4. Other GPU options to try:
+   - `-gpu angle_indirect` - Uses ANGLE (may work better on some systems)
+   - `-gpu swiftshader_indirect` - Pure software rendering (most compatible)
+   - `-gpu host` - Uses host GPU (default, can be unstable)
+
+---
+
 **Symptom**: Images not loading / "Unable to load asset"
 
 **Solutions**:
